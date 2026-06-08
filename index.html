@@ -45,18 +45,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 .btn.primary:hover{background:#ddd;border-color:#ddd}
 .btn:disabled{opacity:.35;cursor:default;pointer-events:none}
 .btn-row{display:flex;gap:8px;width:100%;max-width:440px}
-.canvas-wrap{background:#000;border-radius:10px;overflow:hidden;position:relative;border:1px solid var(--border);width:100%;max-width:440px;aspect-ratio:4/5}
+.canvas-wrap{background:#000;border-radius:10px;overflow:hidden;border:1px solid var(--border);width:100%;max-width:440px;aspect-ratio:4/5}
 canvas{display:block;width:100%;height:100%}
 .progress-bar{height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:6px;width:100%;max-width:440px}
 .progress-fill{height:100%;width:0%;background:#fff;border-radius:1px;transition:width .1s linear}
 .status{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;min-height:16px;letter-spacing:.04em;max-width:440px;line-height:1.6}
-.status.error{color:#f87171}
-.status.success{color:#4ade80}
+.status.error{color:#f87171}.status.success{color:#4ade80}
 .audio-ok{display:none;align-items:center;gap:6px;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;margin-top:6px}
 .audio-ok .dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;animation:pulse 1.5s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .audio-ok span{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.notice{padding:10px 12px;background:#0a120a;border:1px solid #1a3a1a;border-radius:7px;font-family:var(--mono);font-size:10px;color:#4a8a4a;line-height:1.8;letter-spacing:.03em}
+.notice{padding:10px 12px;background:#0a120a;border:1px solid #1a3a1a;border-radius:7px;font-family:var(--mono);font-size:10px;color:#4a8a4a;line-height:1.8}
 </style>
 </head>
 <body>
@@ -71,8 +70,7 @@ canvas{display:block;width:100%;height:100%}
     <div class="field-group">
       <label>Background / Texture</label>
       <div class="upload-zone">
-        <div class="uz-icon">🖼</div>
-        <img class="thumb" id="bg-thumb">
+        <div class="uz-icon">🖼</div><img class="thumb" id="bg-thumb">
         <div><div class="uz-title" id="bg-name">Choisir une image</div><div class="uz-sub">JPG PNG WEBP</div></div>
         <input type="file" accept="image/*" id="bg-file">
       </div>
@@ -80,26 +78,16 @@ canvas{display:block;width:100%;height:100%}
     <div class="field-group">
       <label>Cover de la release</label>
       <div class="upload-zone">
-        <div class="uz-icon">💿</div>
-        <img class="thumb" id="cover-thumb">
+        <div class="uz-icon">💿</div><img class="thumb" id="cover-thumb">
         <div><div class="uz-title" id="cover-name">Choisir une image</div><div class="uz-sub">JPG PNG WEBP</div></div>
         <input type="file" accept="image/*" id="cover-file">
       </div>
     </div>
     <div class="divider"></div>
     <div class="sec-title">Metadata</div>
-    <div class="field-group">
-      <label>Artiste</label>
-      <input type="text" id="f-artist" placeholder="Nom de l'artiste">
-    </div>
-    <div class="field-group">
-      <label>Titre du morceau</label>
-      <input type="text" id="f-title" placeholder="Titre">
-    </div>
-    <div class="field-group">
-      <label>Label</label>
-      <input type="text" id="f-label" placeholder="Nom du label">
-    </div>
+    <div class="field-group"><label>Artiste</label><input type="text" id="f-artist" placeholder="Nom de l'artiste"></div>
+    <div class="field-group"><label>Titre du morceau</label><input type="text" id="f-title" placeholder="Titre"></div>
+    <div class="field-group"><label>Label</label><input type="text" id="f-label" placeholder="Nom du label"></div>
     <div class="divider"></div>
     <div class="sec-title">Audio</div>
     <div class="field-group">
@@ -127,10 +115,7 @@ canvas{display:block;width:100%;height:100%}
         <span class="range-val" id="dur-val">15s</span>
       </div>
     </div>
-    <div class="notice">
-      ⚡ Première génération : FFmpeg (~31 MB) se charge une fois.<br>
-      📁 Sortie : MP4 H.264 · 1080×1350 · Instagram ready.
-    </div>
+    <div class="notice">⚡ FFmpeg (~20 MB) se charge à la première génération.<br>📁 MP4 H.264 · 1080×1350 · Instagram ready.</div>
   </aside>
   <main class="main">
     <div class="canvas-wrap"><canvas id="cv"></canvas></div>
@@ -143,15 +128,20 @@ canvas{display:block;width:100%;height:100%}
   </main>
 </div>
 
+<!-- FFmpeg 0.11.x : pas de Worker externe, 100% inline -->
+<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
+
 <script>
 const W=1080,H=1350;
 const cv=document.getElementById('cv');
 cv.width=W;cv.height=H;
 let bgImg=null,coverImg=null,audioBuffer=null,audioCtx=null;
 let previewRaf=null,previewT=0,previewLast=null;
+let ffmpegReady=false,ff=null;
 
 function shortName(s,n=24){return s.length>n?s.slice(0,n-1)+'…':s;}
 function loadImg(file,cb){const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>cb(i);i.src=e.target.result;};r.readAsDataURL(file);}
+function setStatus(msg,type=''){const el=document.getElementById('status');el.textContent=msg;el.className='status'+(type?' '+type:'');}
 
 document.getElementById('bg-file').onchange=e=>{
   if(!e.target.files[0])return;
@@ -171,9 +161,8 @@ document.getElementById('audio-file').onchange=async e=>{
   if(!e.target.files[0])return;
   const f=e.target.files[0];
   audioCtx=audioCtx||new AudioContext();
-  const ab=await f.arrayBuffer();
   try{
-    audioBuffer=await audioCtx.decodeAudioData(ab);
+    audioBuffer=await audioCtx.decodeAudioData(await f.arrayBuffer());
     const max=Math.max(0,Math.floor(audioBuffer.duration)-30);
     document.getElementById('loop-start').max=max;
     document.getElementById('loop-field').style.cssText='display:flex;flex-direction:column;gap:5px';
@@ -188,8 +177,7 @@ document.getElementById('dur-range').oninput=e=>{document.getElementById('dur-va
 function drawFrame(ctx,t,totalDur){
   ctx.clearRect(0,0,W,H);
   if(bgImg){
-    const scale=1.03+0.015*Math.sin(t*0.25);
-    const sw=W*scale,sh=H*scale;
+    const sc=1.03+0.015*Math.sin(t*0.25),sw=W*sc,sh=H*sc;
     ctx.drawImage(bgImg,(W-sw)/2,(H-sh)/2,sw,sh);
   }else{
     ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,W,H);
@@ -209,53 +197,39 @@ function drawFrame(ctx,t,totalDur){
     ctx.beginPath();ctx.roundRect(cx,cy,cs,cs,16);ctx.stroke();
   }else{
     ctx.fillStyle='#1c1c1c';ctx.beginPath();ctx.roundRect(cx,cy,cs,cs,16);ctx.fill();
-    ctx.strokeStyle='rgba(255,255,255,0.07)';ctx.lineWidth=1.5;
-    ctx.beginPath();ctx.roundRect(cx,cy,cs,cs,16);ctx.stroke();
     ctx.fillStyle='rgba(255,255,255,0.18)';ctx.font='500 32px DM Sans,sans-serif';
     ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Cover',W/2,cy+cs/2);
   }
   ctx.textAlign='center';ctx.textBaseline='alphabetic';
-  ctx.font='500 72px DM Sans,sans-serif';ctx.fillStyle='rgba(255,255,255,0.96)';
-  ctx.fillText(artist,W/2,cy+cs+110);
-  ctx.font='300 46px DM Sans,sans-serif';ctx.fillStyle='rgba(255,255,255,0.60)';
-  ctx.fillText(title,W/2,cy+cs+175);
-  ctx.font='400 26px DM Mono,monospace';ctx.fillStyle='rgba(255,255,255,0.28)';
-  ctx.fillText(label.toUpperCase(),W/2,cy+cs+230);
+  ctx.font='500 72px DM Sans,sans-serif';ctx.fillStyle='rgba(255,255,255,0.96)';ctx.fillText(artist,W/2,cy+cs+110);
+  ctx.font='300 46px DM Sans,sans-serif';ctx.fillStyle='rgba(255,255,255,0.60)';ctx.fillText(title,W/2,cy+cs+175);
+  ctx.font='400 26px DM Mono,monospace';ctx.fillStyle='rgba(255,255,255,0.28)';ctx.fillText(label.toUpperCase(),W/2,cy+cs+230);
   const barW=320,barH=3,barX=(W-barW)/2,barY=cy+cs+290;
   ctx.fillStyle='rgba(255,255,255,0.10)';ctx.beginPath();ctx.roundRect(barX,barY,barW,barH,2);ctx.fill();
   const prog=totalDur>0?(t%totalDur)/totalDur:0;
   ctx.fillStyle='rgba(255,255,255,0.75)';ctx.beginPath();ctx.roundRect(barX,barY,barW*prog,barH,2);ctx.fill();
-  const dotX=barX+barW*prog;
-  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(dotX,barY+barH/2,8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(barX+barW*prog,barY+barH/2,8,0,Math.PI*2);ctx.fill();
   const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
   ctx.font='400 22px DM Mono,monospace';ctx.fillStyle='rgba(255,255,255,0.22)';
   ctx.textAlign='left';ctx.fillText(fmt(Math.floor(t%totalDur)),barX,barY+36);
   ctx.textAlign='right';ctx.fillText(fmt(Math.floor(totalDur)),barX+barW,barY+36);
 }
 
-function setStatus(msg,type=''){
-  const el=document.getElementById('status');
-  el.textContent=msg;el.className='status'+(type?' '+type:'');
-}
-
 function refreshPreview(){
   if(previewRaf){cancelAnimationFrame(previewRaf);previewRaf=null;}
   previewT=0;previewLast=null;
-  const ctx=cv.getContext('2d');
-  const dur=parseInt(document.getElementById('dur-range').value);
+  const ctx=cv.getContext('2d'),dur=parseInt(document.getElementById('dur-range').value);
   function loop(ts){
     if(previewLast===null)previewLast=ts;
     previewT+=(ts-previewLast)/1000;previewLast=ts;
-    drawFrame(ctx,previewT,dur);
-    previewRaf=requestAnimationFrame(loop);
+    drawFrame(ctx,previewT,dur);previewRaf=requestAnimationFrame(loop);
   }
   previewRaf=requestAnimationFrame(loop);
 }
 refreshPreview();
 
 function audioBufferToWav(buffer){
-  const nc=buffer.numberOfChannels,sr=buffer.sampleRate;
-  const ns=buffer.length,bd=16;
+  const nc=buffer.numberOfChannels,sr=buffer.sampleRate,ns=buffer.length,bd=16;
   const byteRate=sr*nc*bd/8,ba=nc*bd/8,dataSize=ns*ba;
   const ab=new ArrayBuffer(44+dataSize),view=new DataView(ab);
   const w=(o,s)=>{for(let i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i));};
@@ -264,26 +238,28 @@ function audioBufferToWav(buffer){
   view.setUint32(24,sr,true);view.setUint32(28,byteRate,true);view.setUint16(32,ba,true);
   view.setUint16(34,bd,true);w(36,'data');view.setUint32(40,dataSize,true);
   let off=44;
-  for(let i=0;i<ns;i++){
-    for(let ch=0;ch<nc;ch++){
-      const s=Math.max(-1,Math.min(1,buffer.getChannelData(ch)[i]));
-      view.setInt16(off,s<0?s*0x8000:s*0x7FFF,true);off+=2;
-    }
+  for(let i=0;i<ns;i++)for(let ch=0;ch<nc;ch++){
+    const s=Math.max(-1,Math.min(1,buffer.getChannelData(ch)[i]));
+    view.setInt16(off,s<0?s*0x8000:s*0x7FFF,true);off+=2;
   }
   return new Blob([ab],{type:'audio/wav'});
 }
 
-// ── FFmpeg via jsdelivr ESM (évite le bug worker unpkg) ────────────────────
-let ffLoaded=false,_FFmpeg,_fetchFile,_toBlobURL;
-
-async function loadFFmpeg(){
-  if(ffLoaded)return;
-  setStatus('Chargement de FFmpeg (~31 MB)…');
-
-  const {FFmpeg}=await import('https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm');
-  const {fetchFile,toBlobURL}=await import('https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/+esm');
-  _FFmpeg=FFmpeg;_fetchFile=fetchFile;_toBlobURL=toBlobURL;
-  ffLoaded=true;
+async function initFFmpeg(){
+  if(ffmpegReady)return;
+  setStatus('Chargement de FFmpeg (~20 MB)…');
+  const {createFFmpeg}=FFmpeg; // global from 0.11 script tag
+  ff=createFFmpeg({
+    corePath:'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
+    log:false,
+    progress:({ratio})=>{
+      const pct=Math.round(ratio*100);
+      document.getElementById('rec-prog').style.width=(50+pct*0.48)+'%';
+      setStatus(`Encodage MP4… ${pct}%`);
+    }
+  });
+  await ff.load();
+  ffmpegReady=true;
 }
 
 async function startExport(){
@@ -294,27 +270,26 @@ async function startExport(){
   btn.disabled=true;
   if(previewRaf){cancelAnimationFrame(previewRaf);previewRaf=null;}
 
-  try{await loadFFmpeg();}
-  catch(e){setStatus('Erreur chargement FFmpeg : '+e.message,'error');btn.disabled=false;return;}
+  try{await initFFmpeg();}
+  catch(e){setStatus('Erreur FFmpeg : '+e.message,'error');btn.disabled=false;refreshPreview();return;}
 
   // Render frames
   setStatus('Rendu des frames…');
   const ctx=cv.getContext('2d');
-  const frames=[];
   for(let i=0;i<totalFrames;i++){
     drawFrame(ctx,i/fps,dur);
     const blob=await new Promise(res=>cv.toBlob(res,'image/png'));
-    frames.push(blob);
+    const buf=await blob.arrayBuffer();
+    ff.FS('writeFile',`f${String(i).padStart(5,'0')}.png`,new Uint8Array(buf));
     if(i%fps===0){
-      prog.style.width=(i/totalFrames*35)+'%';
+      prog.style.width=(i/totalFrames*45)+'%';
       setStatus(`Rendu des frames… ${Math.round(i/totalFrames*100)}%`);
       await new Promise(r=>setTimeout(r,0));
     }
   }
-  prog.style.width='38%';
+  prog.style.width='48%';
 
   // Audio
-  let audioBlob=null;
   if(audioBuffer){
     setStatus('Encodage audio…');
     const ls=parseFloat(document.getElementById('loop-start').value)||0;
@@ -324,52 +299,31 @@ async function startExport(){
     const src=offCtx.createBufferSource();
     src.buffer=audioBuffer;src.connect(offCtx.destination);src.start(0,ls);
     const rendered=await offCtx.startRendering();
-    audioBlob=audioBufferToWav(rendered);
-    prog.style.width='42%';
+    const wavBlob=audioBufferToWav(rendered);
+    ff.FS('writeFile','audio.wav',new Uint8Array(await wavBlob.arrayBuffer()));
   }
-
-  // Init FFmpeg avec core jsdelivr
-  setStatus('Initialisation FFmpeg…');
-  const baseCore='https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/esm';
-  const ffmpeg=new _FFmpeg();
-  ffmpeg.on('progress',({progress})=>{
-    prog.style.width=(42+Math.round(progress*100)*0.55)+'%';
-    setStatus(`Encodage MP4… ${Math.round(progress*100)}%`);
-  });
-  ffmpeg.on('log',({message})=>console.log('[ff]',message));
-
-  try{
-    await ffmpeg.load({
-      coreURL: await _toBlobURL(`${baseCore}/ffmpeg-core.js`,'text/javascript'),
-      wasmURL: await _toBlobURL(`${baseCore}/ffmpeg-core.wasm`,'application/wasm'),
-    });
-  }catch(e){setStatus('Erreur init FFmpeg : '+e.message,'error');btn.disabled=false;refreshPreview();return;}
-
-  setStatus('Écriture des frames…');
-  for(let i=0;i<frames.length;i++){
-    await ffmpeg.writeFile(`f${String(i).padStart(5,'0')}.png`,await _fetchFile(frames[i]));
-  }
-  if(audioBlob)await ffmpeg.writeFile('audio.wav',await _fetchFile(audioBlob));
 
   setStatus('Encodage H.264…');
   prog.style.width='50%';
 
-  const args=[
-    '-framerate',String(fps),'-i','f%05d.png',
-    ...(audioBlob?['-i','audio.wav','-shortest']:[]),
-    '-vf',`scale=${W}:${H}`,
-    '-c:v','libx264','-preset','fast','-crf','20',
-    '-pix_fmt','yuv420p',
-    ...(audioBlob?['-c:a','aac','-b:a','192k']:[]),
-    '-movflags','+faststart','out.mp4'
-  ];
+  try{
+    await ff.run(
+      '-framerate',String(fps),
+      '-i','f%05d.png',
+      ...(audioBuffer?['-i','audio.wav','-shortest']:[]),
+      '-vf',`scale=${W}:${H}`,
+      '-c:v','libx264',
+      '-preset','fast',
+      '-crf','20',
+      '-pix_fmt','yuv420p',
+      ...(audioBuffer?['-c:a','aac','-b:a','192k']:[]),
+      '-movflags','+faststart',
+      'out.mp4'
+    );
+  }catch(e){setStatus('Erreur encodage : '+e.message,'error');btn.disabled=false;refreshPreview();return;}
 
-  try{await ffmpeg.exec(args);}
-  catch(e){setStatus('Erreur encodage : '+e.message,'error');btn.disabled=false;refreshPreview();return;}
-
-  const data=await ffmpeg.readFile('out.mp4');
-  const mp4Blob=new Blob([data.buffer],{type:'video/mp4'});
-  const url=URL.createObjectURL(mp4Blob);
+  const data=ff.FS('readFile','out.mp4');
+  const url=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
   const a=document.createElement('a');
   const artist=(document.getElementById('f-artist').value||'release').replace(/\s+/g,'_');
   const title=(document.getElementById('f-title').value||'video').replace(/\s+/g,'_');
@@ -379,9 +333,10 @@ async function startExport(){
   setStatus('✓ MP4 téléchargé — prêt pour Instagram.','success');
   btn.disabled=false;
 
-  for(let i=0;i<frames.length;i++){try{await ffmpeg.deleteFile(`f${String(i).padStart(5,'0')}.png`);}catch(e){}}
-  try{await ffmpeg.deleteFile('out.mp4');}catch(e){}
-  if(audioBlob)try{await ffmpeg.deleteFile('audio.wav');}catch(e){}
+  // Cleanup FS
+  for(let i=0;i<totalFrames;i++)try{ff.FS('unlink',`f${String(i).padStart(5,'0')}.png`);}catch(e){}
+  try{ff.FS('unlink','out.mp4');}catch(e){}
+  if(audioBuffer)try{ff.FS('unlink','audio.wav');}catch(e){}
   setTimeout(()=>{prog.style.width='0%';},3000);
   refreshPreview();
 }
