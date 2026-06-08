@@ -12,6 +12,7 @@
   --text:#f0f0f0;--muted:#666;
   --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
 }
+@font-face{font-family:'AkzidenzGroteskBE-LightEx';src:url('fonts/AkzidenzGroteskBE-LightEx.otf') format('opentype');font-weight:normal;font-style:normal}
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
 html,body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:14px}
 header{border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;gap:14px}
@@ -169,6 +170,8 @@ cv.width=W;cv.height=H;
 let bgImg=null,coverImg=null,audioBuffer=null,audioCtx=null;
 let previewRaf=null,previewT=0,previewLast=null;
 let ffmpegReady=false,ff=null;
+const AGLightEx=new FontFace('AkzidenzGroteskBE-LightEx','url(fonts/AkzidenzGroteskBE-LightEx.otf)');
+AGLightEx.load().then(f=>{document.fonts.add(f);refreshPreview();});
 
 function shortName(s,n=24){return s.length>n?s.slice(0,n-1)+'…':s;}
 function loadImg(file,cb){const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>cb(i);i.src=e.target.result;};r.readAsDataURL(file);}
@@ -240,9 +243,9 @@ function drawFrame(ctx,t,totalDur){
   const opT=parseInt(document.getElementById('op-title').value)/100;
   const opL=parseInt(document.getElementById('op-label').value)/100;
   ctx.textAlign='center';ctx.textBaseline='alphabetic';
-  ctx.font='500 72px DM Sans,sans-serif';ctx.fillStyle=`rgba(${rgb},${opA})`;ctx.fillText(artist,W/2,cy+cs+110);
-  ctx.font='300 46px DM Sans,sans-serif';ctx.fillStyle=`rgba(${rgb},${opT})`;ctx.fillText(title,W/2,cy+cs+175);
-  ctx.font='400 26px DM Mono,monospace';ctx.fillStyle=`rgba(${rgb},${opL})`;ctx.fillText(label.toUpperCase(),W/2,cy+cs+230);
+  ctx.font='72px AkzidenzGroteskBE-LightEx,sans-serif';ctx.fillStyle=`rgba(${rgb},${opA})`;ctx.fillText(artist,W/2,cy+cs+110);
+  ctx.font='46px AkzidenzGroteskBE-LightEx,sans-serif';ctx.fillStyle=`rgba(${rgb},${opT})`;ctx.fillText(title,W/2,cy+cs+175);
+  ctx.font='26px AkzidenzGroteskBE-LightEx,sans-serif';ctx.fillStyle=`rgba(${rgb},${opL})`;ctx.fillText(label.toUpperCase(),W/2,cy+cs+230);
   const barW=320,barH=3,barX=(W-barW)/2,barY=cy+cs+290;
   ctx.fillStyle='rgba(255,255,255,0.10)';ctx.beginPath();ctx.roundRect(barX,barY,barW,barH,2);ctx.fill();
   const prog=totalDur>0?(t%totalDur)/totalDur:0;
