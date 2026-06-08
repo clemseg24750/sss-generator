@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Release Video Generator</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0a;--surface:#111;--surface2:#1a1a1a;
+  --border:rgba(255,255,255,0.08);--border-h:rgba(255,255,255,0.18);
+  --text:#f0f0f0;--muted:#666;
+  --mono:'DM Mono',monospace;--sans:'DM Sans',sans-serif;
+}
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
+html,body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:14px}
+header{border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;gap:14px}
+header .logo{font-family:var(--mono);font-size:12px;letter-spacing:.15em;color:var(--muted);text-transform:uppercase}
+header .sep{width:1px;height:14px;background:var(--border-h)}
+header h1{font-size:13px;font-weight:400;color:var(--muted);letter-spacing:.04em}
+.app{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 53px)}
+.sidebar{border-right:1px solid var(--border);padding:20px;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+.main{padding:24px;display:flex;flex-direction:column;align-items:center;gap:16px}
+.field-group{display:flex;flex-direction:column;gap:5px}
+label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+input[type=text]{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:var(--sans);font-size:14px;padding:8px 11px;width:100%;outline:none;transition:border-color .15s}
+input[type=text]:focus{border-color:var(--border-h)}
+input[type=text]::placeholder{color:var(--muted)}
+.upload-zone{position:relative;background:var(--surface);border:1px dashed var(--border);border-radius:8px;padding:13px;cursor:pointer;transition:border-color .15s,background .15s;display:flex;align-items:center;gap:11px;overflow:hidden}
+.upload-zone:hover{border-color:var(--border-h);background:var(--surface2)}
+.upload-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.uz-icon{width:34px;height:34px;border-radius:5px;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:15px}
+.uz-title{font-size:13px;color:var(--text);font-weight:500}
+.uz-sub{font-size:11px;color:var(--muted);margin-top:2px;font-family:var(--mono)}
+.thumb{width:34px;height:34px;object-fit:cover;border-radius:4px;display:none;flex-shrink:0}
+.divider{height:1px;background:var(--border)}
+.sec-title{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin-bottom:-4px}
+input[type=range]{-webkit-appearance:none;flex:1;height:3px;background:var(--border-h);border-radius:2px;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;cursor:pointer}
+.range-row{display:flex;align-items:center;gap:10px}
+.range-val{font-family:var(--mono);font-size:11px;color:var(--muted);min-width:28px;text-align:right}
+.btn{border:1px solid var(--border-h);border-radius:6px;background:transparent;color:var(--text);font-family:var(--sans);font-size:13px;padding:9px 16px;cursor:pointer;display:flex;align-items:center;gap:7px;transition:background .15s;white-space:nowrap}
+.btn:hover{background:var(--surface2)}
+.btn.primary{background:#fff;color:#000;border-color:#fff;font-weight:500}
+.btn.primary:hover{background:#ddd;border-color:#ddd}
+.btn:disabled{opacity:.35;cursor:default;pointer-events:none}
+.btn-row{display:flex;gap:8px;width:100%;max-width:440px}
+.canvas-wrap{background:#000;border-radius:10px;overflow:hidden;position:relative;border:1px solid var(--border);width:100%;max-width:440px;aspect-ratio:4/5}
+canvas{display:block;width:100%;height:100%}
+.progress-bar{height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:6px;width:100%;max-width:440px}
+.progress-fill{height:100%;width:0%;background:#fff;border-radius:1px;transition:width .1s linear}
+.status{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;min-height:16px;letter-spacing:.04em;max-width:440px;line-height:1.6}
+.status.error{color:#f87171}
+.status.success{color:#4ade80}
+.audio-ok{display:none;align-items:center;gap:6px;padding:7px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;margin-top:6px}
+.audio-ok .dot{width:6px;height:6px;border-radius:50%;background:#4ade80;flex-shrink:0;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.audio-ok span{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.notice{padding:10px 12px;background:#0f1a0f;border:1px solid #1e3a1e;border-radius:7px;font-family:var(--mono);font-size:10px;color:#4a7a4a;line-height:1.7;letter-spacing:.03em}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="logo">SSS</span>
+  <div class="sep"></div>
+  <h1>Release Video Generator — Instagram 4:5</h1>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+
+    <div class="sec-title">Visuels</div>
+
+    <div class="field-group">
+      <label>Background / Texture</label>
+      <div class="upload-zone">
+        <div class="uz-icon">🖼</div>
+        <img class="thumb" id="bg-thumb">
+        <div><div class="uz-title" id="bg-name">Choisir une image</div><div class="uz-sub">JPG PNG WEBP</div></div>
+        <input type="file" accept="image/*" id="bg-file">
+      </div>
+    </div>
+
+    <div class="field-group">
+      <label>Cover de la release</label>
+      <div class="upload-zone">
+        <div class="uz-icon">💿</div>
+        <img class="thumb" id="cover-thumb">
+        <div><div class="uz-title" id="cover-name">Choisir une image</div><div class="uz-sub">JPG PNG WEBP</div></div>
+        <input type="file" accept="image/*" id="cover-file">
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="sec-title">Metadata</div>
+
+    <div class="field-group">
+      <label>Artiste</label>
+      <input type="text" id="f-artist" placeholder="Nom de l'artiste">
+    </div>
+    <div class="field-group">
+      <label>Titre du morceau</label>
+      <input type="text" id="f-title" placeholder="Titre">
+    </div>
+    <div class="field-group">
+      <label>Label</label>
+      <input type="text" id="f-label" placeholder="Nom du label">
+    </div>
+
+    <div class="divider"></div>
+    <div class="sec-title">Audio</div>
+
+    <div class="field-group">
+      <label>Extrait audio (boucle 30s max)</label>
+      <div class="upload-zone">
+        <div class="uz-icon">🎵</div>
+        <div><div class="uz-title" id="audio-name">Choisir un fichier</div><div class="uz-sub">MP3 WAV AAC</div></div>
+        <input type="file" accept="audio/*" id="audio-file">
+      </div>
+      <div class="audio-ok" id="audio-ok"><div class="dot"></div><span id="audio-fname">—</span></div>
+    </div>
+
+    <div class="field-group" id="loop-field" style="display:none">
+      <label>Début de la boucle</label>
+      <div class="range-row">
+        <input type="range" id="loop-start" min="0" max="300" step="1" value="0">
+        <span class="range-val" id="loop-val">0s</span>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="sec-title">Export</div>
+
+    <div class="field-group">
+      <label>Durée de la vidéo</label>
+      <div class="range-row">
+        <input type="range" id="dur-range" min="5" max="30" step="1" value="15">
+        <span class="range-val" id="dur-val">15s</span>
+      </div>
+    </div>
+
+    <div class="notice">
+      ⚡ Première génération : FFmpeg (~31 MB) se télécharge une fois.<br>
+      ✅ Ouvrir dans <strong>Chrome</strong> ou <strong>Edge</strong> pour de meilleurs résultats.<br>
+      📁 Sortie : MP4 H.264, 1080×1350, prêt Instagram.
+    </div>
+
+  </aside>
+
+  <main class="main">
+    <div class="canvas-wrap">
+      <canvas id="cv"></canvas>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="rec-prog"></div></div>
+    <div class="btn-row">
+      <button class="btn" onclick="refreshPreview()">↺ Aperçu</button>
+      <button class="btn primary" id="rec-btn" onclick="startExport()">⬇ Générer MP4</button>
+    </div>
+    <p class="status" id="status"></p>
+  </main>
+</div>
+
+<script>
+// ── Canvas setup 4:5 = 1080×1350 ──────────────────────────────────────────
+const W = 1080, H = 1350;
+const cv = document.getElementById('cv');
+cv.width = W; cv.height = H;
+
+let bgImg = null, coverImg = null;
+let audioBuffer = null, audioCtx = null;
+let previewRaf = null, previewT = 0, previewLast = null;
+
+function shortName(s, n=24){ return s.length>n ? s.slice(0,n-1)+'…' : s; }
+
+function loadImg(file, cb){
+  const r = new FileReader();
+  r.onload = e => { const i = new Image(); i.onload = () => cb(i); i.src = e.target.result; };
+  r.readAsDataURL(file);
+}
+
+document.getElementById('bg-file').onchange = e => {
+  if(!e.target.files[0]) return;
+  loadImg(e.target.files[0], img => { bgImg = img; });
+  const t = document.getElementById('bg-thumb');
+  t.src = URL.createObjectURL(e.target.files[0]); t.style.display='block';
+  document.getElementById('bg-name').textContent = shortName(e.target.files[0].name);
+};
+
+document.getElementById('cover-file').onchange = e => {
+  if(!e.target.files[0]) return;
+  loadImg(e.target.files[0], img => { coverImg = img; });
+  const t = document.getElementById('cover-thumb');
+  t.src = URL.createObjectURL(e.target.files[0]); t.style.display='block';
+  document.getElementById('cover-name').textContent = shortName(e.target.files[0].name);
+};
+
+document.getElementById('audio-file').onchange = async e => {
+  if(!e.target.files[0]) return;
+  const f = e.target.files[0];
+  audioCtx = audioCtx || new AudioContext();
+  const ab = await f.arrayBuffer();
+  try {
+    audioBuffer = await audioCtx.decodeAudioData(ab);
+    const max = Math.max(0, Math.floor(audioBuffer.duration)-30);
+    document.getElementById('loop-start').max = max;
+    document.getElementById('loop-field').style.cssText = 'display:flex;flex-direction:column;gap:5px';
+    document.getElementById('audio-ok').style.display = 'flex';
+    document.getElementById('audio-fname').textContent = shortName(f.name, 32);
+    document.getElementById('audio-name').textContent = shortName(f.name);
+  } catch(err) { setStatus('Fichier audio non supporté.','error'); }
+};
+
+document.getElementById('loop-start').oninput = e => { document.getElementById('loop-val').textContent = e.target.value+'s'; };
+document.getElementById('dur-range').oninput  = e => { document.getElementById('dur-val').textContent  = e.target.value+'s'; };
+
+// ── Draw ──────────────────────────────────────────────────────────────────
+function drawFrame(ctx, t, totalDur){
+  ctx.clearRect(0,0,W,H);
+
+  if(bgImg){
+    const scale = 1.03 + 0.015*Math.sin(t*0.25);
+    const sw=W*scale, sh=H*scale;
+    ctx.drawImage(bgImg,(W-sw)/2,(H-sh)/2,sw,sh);
+  } else {
+    ctx.fillStyle='#0d0d0d'; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
+    for(let y=0;y<H;y+=60){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+    for(let x=0;x<W;x+=60){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  }
+  ctx.fillStyle='rgba(0,0,0,0.52)'; ctx.fillRect(0,0,W,H);
+
+  const artist = document.getElementById('f-artist').value || 'Artist';
+  const title  = document.getElementById('f-title').value  || 'Track Title';
+  const label  = document.getElementById('f-label').value  || 'Label';
+
+  // Cover — statique
+  const cs=640, cx=(W-cs)/2, cy=200;
+  if(coverImg){
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(cx,cy,cs,cs,16); ctx.clip();
+    ctx.drawImage(coverImg,cx,cy,cs,cs);
+    ctx.restore();
+    ctx.strokeStyle='rgba(255,255,255,0.10)'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.roundRect(cx,cy,cs,cs,16); ctx.stroke();
+  } else {
+    ctx.fillStyle='#1c1c1c';
+    ctx.beginPath(); ctx.roundRect(cx,cy,cs,cs,16); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.07)'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.roundRect(cx,cy,cs,cs,16); ctx.stroke();
+    ctx.fillStyle='rgba(255,255,255,0.18)';
+    ctx.font='500 32px DM Sans,sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('Cover',W/2,cy+cs/2);
+  }
+
+  // Text
+  ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.font='500 72px DM Sans,sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.96)';
+  ctx.fillText(artist, W/2, cy+cs+110);
+
+  ctx.font='300 46px DM Sans,sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.60)';
+  ctx.fillText(title, W/2, cy+cs+175);
+
+  ctx.font='400 26px DM Mono,monospace';
+  ctx.fillStyle='rgba(255,255,255,0.28)';
+  ctx.fillText(label.toUpperCase(), W/2, cy+cs+230);
+
+  // Progress bar
+  const barW=320, barH=3, barX=(W-barW)/2, barY=cy+cs+290;
+  ctx.fillStyle='rgba(255,255,255,0.10)';
+  ctx.beginPath(); ctx.roundRect(barX,barY,barW,barH,2); ctx.fill();
+  const prog = totalDur>0 ? (t%totalDur)/totalDur : 0;
+  ctx.fillStyle='rgba(255,255,255,0.75)';
+  ctx.beginPath(); ctx.roundRect(barX,barY,barW*prog,barH,2); ctx.fill();
+  const dotX = barX+barW*prog;
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(dotX,barY+barH/2,8,0,Math.PI*2); ctx.fill();
+  const fmt = s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  ctx.font='400 22px DM Mono,monospace';
+  ctx.fillStyle='rgba(255,255,255,0.22)';
+  ctx.textAlign='left';  ctx.fillText(fmt(Math.floor(t%totalDur)), barX, barY+36);
+  ctx.textAlign='right'; ctx.fillText(fmt(Math.floor(totalDur)),   barX+barW, barY+36);
+}
+
+function setStatus(msg, type=''){
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status'+(type?' '+type:'');
+}
+
+function refreshPreview(){
+  if(previewRaf){ cancelAnimationFrame(previewRaf); previewRaf=null; }
+  previewT=0; previewLast=null;
+  const ctx = cv.getContext('2d');
+  const dur = parseInt(document.getElementById('dur-range').value);
+  function loop(ts){
+    if(previewLast===null) previewLast=ts;
+    previewT+=(ts-previewLast)/1000; previewLast=ts;
+    drawFrame(ctx,previewT,dur);
+    previewRaf=requestAnimationFrame(loop);
+  }
+  previewRaf=requestAnimationFrame(loop);
+}
+refreshPreview();
+
+// ── WAV encoder ───────────────────────────────────────────────────────────
+function audioBufferToWav(buffer){
+  const nc=buffer.numberOfChannels, sr=buffer.sampleRate;
+  const ns=buffer.length, bd=16;
+  const byteRate=sr*nc*bd/8, ba=nc*bd/8, dataSize=ns*ba;
+  const ab=new ArrayBuffer(44+dataSize), view=new DataView(ab);
+  const w=(o,s)=>{for(let i=0;i<s.length;i++)view.setUint8(o+i,s.charCodeAt(i));};
+  w(0,'RIFF'); view.setUint32(4,36+dataSize,true);
+  w(8,'WAVE'); w(12,'fmt ');
+  view.setUint32(16,16,true); view.setUint16(20,1,true);
+  view.setUint16(22,nc,true); view.setUint32(24,sr,true);
+  view.setUint32(28,byteRate,true); view.setUint16(32,ba,true);
+  view.setUint16(34,bd,true); w(36,'data');
+  view.setUint32(40,dataSize,true);
+  let off=44;
+  for(let i=0;i<ns;i++){
+    for(let ch=0;ch<nc;ch++){
+      const s=Math.max(-1,Math.min(1,buffer.getChannelData(ch)[i]));
+      view.setInt16(off,s<0?s*0x8000:s*0x7FFF,true); off+=2;
+    }
+  }
+  return new Blob([ab],{type:'audio/wav'});
+}
+
+// ── FFmpeg loader (UMD single-thread, no SharedArrayBuffer needed) ─────────
+let ffmpegReady = false;
+let _FFmpeg, _fetchFile, _toBlobURL;
+
+async function loadFFmpegLibs(){
+  if(ffmpegReady) return;
+  setStatus('Téléchargement de FFmpeg (~31 MB)…');
+
+  // Load UMD builds via script tags — avoids ESM worker path issues
+  await loadScript('https://unpkg.com/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js');
+  await loadScript('https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js');
+
+  _FFmpeg    = window.FFmpegWASM.FFmpeg;
+  _fetchFile = window.FFmpegUtil.fetchFile;
+  _toBlobURL = window.FFmpegUtil.toBlobURL;
+  ffmpegReady = true;
+}
+
+function loadScript(src){
+  return new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src=src; s.onload=resolve; s.onerror=()=>reject(new Error('Failed: '+src));
+    document.head.appendChild(s);
+  });
+}
+
+// ── Export ────────────────────────────────────────────────────────────────
+async function startExport(){
+  const dur = parseInt(document.getElementById('dur-range').value);
+  const fps = 30;
+  const totalFrames = dur*fps;
+  const btn = document.getElementById('rec-btn');
+  const prog = document.getElementById('rec-prog');
+  btn.disabled=true;
+
+  if(previewRaf){ cancelAnimationFrame(previewRaf); previewRaf=null; }
+
+  // 1. Load FFmpeg libs
+  try { await loadFFmpegLibs(); }
+  catch(e){ setStatus('Erreur de chargement FFmpeg. Vérifiez votre connexion internet.','error'); btn.disabled=false; return; }
+
+  // 2. Render frames
+  setStatus('Rendu des frames…');
+  const ctx = cv.getContext('2d');
+  const frames=[];
+  for(let i=0;i<totalFrames;i++){
+    drawFrame(ctx, i/fps, dur);
+    const blob = await new Promise(res=>cv.toBlob(res,'image/png'));
+    frames.push(blob);
+    if(i%fps===0){
+      prog.style.width=(i/totalFrames*35)+'%';
+      setStatus(`Rendu des frames… ${Math.round(i/totalFrames*100)}%`);
+      await new Promise(r=>setTimeout(r,0));
+    }
+  }
+  prog.style.width='38%';
+
+  // 3. Render audio (if any)
+  let audioBlob=null;
+  if(audioBuffer){
+    setStatus('Encodage audio…');
+    const loopStart=parseFloat(document.getElementById('loop-start').value)||0;
+    const loopDur=Math.min(dur, audioBuffer.duration-loopStart);
+    const sr=audioBuffer.sampleRate;
+    const ns=Math.ceil(loopDur*sr);
+    const offCtx=new OfflineAudioContext(2,ns,sr);
+    const src=offCtx.createBufferSource();
+    src.buffer=audioBuffer; src.connect(offCtx.destination);
+    src.start(0,loopStart);
+    const rendered=await offCtx.startRendering();
+    audioBlob=audioBufferToWav(rendered);
+    prog.style.width='42%';
+  }
+
+  // 4. FFmpeg: frames → MP4
+  setStatus('Initialisation de FFmpeg…');
+
+  // Use single-thread core to avoid SharedArrayBuffer requirement
+  const baseCore='https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
+  const ffmpeg=new _FFmpeg();
+
+  ffmpeg.on('progress',({progress})=>{
+    const pct=Math.round(progress*100);
+    prog.style.width=(42+pct*0.55)+'%';
+    setStatus(`Encodage MP4… ${pct}%`);
+  });
+  ffmpeg.on('log',({message})=>console.log('[ff]',message));
+
+  try {
+    await ffmpeg.load({
+      coreURL: await _toBlobURL(`${baseCore}/ffmpeg-core.js`,'text/javascript'),
+      wasmURL: await _toBlobURL(`${baseCore}/ffmpeg-core.wasm`,'application/wasm'),
+    });
+  } catch(e){
+    setStatus('Erreur init FFmpeg : '+e.message,'error');
+    btn.disabled=false; refreshPreview(); return;
+  }
+
+  setStatus('Écriture des frames…');
+  for(let i=0;i<frames.length;i++){
+    const name=`f${String(i).padStart(5,'0')}.png`;
+    await ffmpeg.writeFile(name, await _fetchFile(frames[i]));
+  }
+  if(audioBlob) await ffmpeg.writeFile('audio.wav', await _fetchFile(audioBlob));
+
+  setStatus('Encodage H.264…');
+  prog.style.width='50%';
+
+  const args=[
+    '-framerate', String(fps),
+    '-i', 'f%05d.png',
+    ...(audioBlob ? ['-i','audio.wav','-shortest'] : []),
+    '-vf', `scale=${W}:${H}`,
+    '-c:v','libx264',
+    '-preset','fast',
+    '-crf','20',
+    '-pix_fmt','yuv420p',
+    ...(audioBlob ? ['-c:a','aac','-b:a','192k'] : []),
+    '-movflags','+faststart',
+    'out.mp4'
+  ];
+
+  try { await ffmpeg.exec(args); }
+  catch(e){ setStatus('Erreur encodage : '+e.message,'error'); btn.disabled=false; refreshPreview(); return; }
+
+  const data = await ffmpeg.readFile('out.mp4');
+  const mp4Blob = new Blob([data.buffer],{type:'video/mp4'});
+  const url = URL.createObjectURL(mp4Blob);
+  const a = document.createElement('a');
+  const artist=(document.getElementById('f-artist').value||'release').replace(/\s+/g,'_');
+  const title =(document.getElementById('f-title').value ||'video').replace(/\s+/g,'_');
+  a.download=`${artist}-${title}.mp4`;
+  a.href=url; a.click();
+
+  prog.style.width='100%';
+  setStatus('✓ MP4 téléchargé — prêt pour Instagram.','success');
+  btn.disabled=false;
+
+  // cleanup
+  for(let i=0;i<frames.length;i++){
+    try{ await ffmpeg.deleteFile(`f${String(i).padStart(5,'0')}.png`); }catch(e){}
+  }
+  try{ await ffmpeg.deleteFile('out.mp4'); }catch(e){}
+  if(audioBlob) try{ await ffmpeg.deleteFile('audio.wav'); }catch(e){}
+
+  setTimeout(()=>{ prog.style.width='0%'; }, 3000);
+  refreshPreview();
+}
+</script>
+</body>
+</html>
