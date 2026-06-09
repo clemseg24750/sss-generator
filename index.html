@@ -16,7 +16,7 @@
 @font-face{font-family:'AkzidenzGroteskBE-LightEx';src:url('fonts/AkzidenzGroteskBE-LightEx.otf') format('opentype');font-weight:normal;font-style:normal}
 html,body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:14px}
 header{border-bottom:1px solid var(--border);padding:16px 28px;display:flex;align-items:center;gap:14px}
-header .logo{font-family:var(--mono);font-size:12px;letter-spacing:.15em;color:var(--muted);text-transform:uppercase}
+header .logo{height:28px;width:auto;display:block;opacity:0.85;filter:invert(1)}
 header .sep{width:1px;height:14px;background:var(--border-h)}
 header h1{font-size:13px;font-weight:400;color:var(--muted);letter-spacing:.04em}
 .app{display:grid;grid-template-columns:340px 1fr;min-height:calc(100vh - 53px)}
@@ -62,13 +62,14 @@ canvas{display:block;width:100%;height:100%}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 .audio-ok span{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .notice{padding:10px 12px;background:#0a120a;border:1px solid #1a3a1a;border-radius:7px;font-family:var(--mono);font-size:10px;color:#4a8a4a;line-height:1.8}
+.color-pick.active{background:#fff;color:#000;border-color:#fff;font-weight:500}
 </style>
 </head>
 <body>
 <header>
-  <span class="logo">SSS</span>
+  <img class="logo" src="https://res.cloudinary.com/shotgun/image/upload/c_limit,w_1200,h_630/f_jpg/q_auto/production/artworks/SSS_LOGO_NOTEXT-X1.5-B_W_rfprc1.png" alt="SSS">
   <div class="sep"></div>
-  <h1>Release Video Generator — Instagram 4:5</h1>
+  <h1>Post Generator</h1>
 </header>
 <div class="app">
   <aside class="sidebar">
@@ -121,7 +122,10 @@ canvas{display:block;width:100%;height:100%}
     <div class="sec-title">Textes</div>
     <div class="field-group">
       <label>Couleur des textes</label>
-      <input type="color" id="text-color" value="#ffffff">
+      <div class="btn-row" style="max-width:none">
+        <button class="btn color-pick active" id="pick-white" onclick="setTextColor('white')" style="flex:1;justify-content:center">Blanc</button>
+        <button class="btn color-pick" id="pick-black" onclick="setTextColor('black')" style="flex:1;justify-content:center">Noir</button>
+      </div>
     </div>
     <div class="field-group">
       <label>Opacité — Artiste</label>
@@ -270,7 +274,11 @@ document.getElementById('dur-range').oninput=e=>{state.dur=+e.target.value;elDur
 document.getElementById('op-artist').oninput=e=>{state.opA=+e.target.value/100;elOpArtistVal.textContent=e.target.value+'%';};
 document.getElementById('op-title').oninput=e=>{state.opT=+e.target.value/100;elOpTitleVal.textContent=e.target.value+'%';};
 document.getElementById('op-label').oninput=e=>{state.opL=+e.target.value/100;elOpLabelVal.textContent=e.target.value+'%';};
-document.getElementById('text-color').oninput=e=>{state.rgb=hexToRgb(e.target.value);};
+function setTextColor(c){
+  state.rgb=c==='black'?'0,0,0':'255,255,255';
+  document.getElementById('pick-white').classList.toggle('active',c==='white');
+  document.getElementById('pick-black').classList.toggle('active',c==='black');
+}
 document.getElementById('f-artist').oninput=e=>{state.artist=e.target.value;};
 document.getElementById('f-title').oninput=e=>{state.title=e.target.value;};
 document.getElementById('f-label').oninput=e=>{state.label=e.target.value;};
