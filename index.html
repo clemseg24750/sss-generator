@@ -249,22 +249,6 @@ canvas{display:block;width:100%;height:100%}
         </div>
       </div>
       <div class="divider"></div>
-      <div class="sec-title">Filigrane</div>
-      <div class="field-group">
-        <label>Position</label>
-        <div class="btn-row" style="max-width:none">
-          <button class="btn color-pick" id="p-fil-left" onclick="setPFilPos('left')" style="flex:1;justify-content:center">Gauche</button>
-          <button class="btn color-pick active" id="p-fil-right" onclick="setPFilPos('right')" style="flex:1;justify-content:center">Droite</button>
-        </div>
-      </div>
-      <div class="field-group">
-        <label>Opacité</label>
-        <div class="range-row">
-          <input type="range" id="p-fil-op" min="0" max="100" step="1" value="100">
-          <span class="range-val" id="p-fil-op-val">100%</span>
-        </div>
-      </div>
-      <div class="divider"></div>
       <div class="sec-title">Texte</div>
       <div class="field-group"><label>Contenu</label><input type="text" id="p-text" placeholder="Artiste / épisode"></div>
       <div class="field-group">
@@ -537,22 +521,16 @@ const pCtx=pcv.getContext('2d');
 const elPodcastStatus=document.getElementById('podcast-status');
 const elPodcastCvWrap=document.getElementById('podcast-cv-wrap');
 
-let podcastBgImg=null,sssLogoImg=null,sssFiligrane=null;
+let podcastBgImg=null,sssLogoImg=null;
 
 const _logo=new Image();
 _logo.onload=()=>{sssLogoImg=_logo;drawPodcastFrame();};
 _logo.src='sss-logo.jpg';
 
-const _fil=new Image();
-_fil.onload=()=>{sssFiligrane=_fil;drawPodcastFrame();};
-_fil.onerror=()=>{sssFiligrane=null;};
-_fil.src='sss-filigrane.png';
-
 const podcastState={
   bgZoom:100,bgPosX:50,bgPosY:50,
   overlayOpacity:0,
   text:'',textRgb:'255,255,255',textPos:'center-left',
-  filigranePos:'right',filigraneOpacity:1,
   logoColor:'white',logoCorner:'bottom-left',
   format:'instagram'
 };
@@ -577,16 +555,6 @@ function drawPodcastFrame(){
   if(podcastState.overlayOpacity>0){
     pCtx.fillStyle='rgba(0,0,0,'+podcastState.overlayOpacity/100+')';
     pCtx.fillRect(0,0,PW,PH);
-  }
-  if(sssFiligrane){
-    const fh=PH,fw=fh*(sssFiligrane.naturalWidth/sssFiligrane.naturalHeight);
-    const fx=PW-fw*0.72;
-    pCtx.save();pCtx.globalAlpha=podcastState.filigraneOpacity;
-    if(podcastState.filigranePos==='left'){
-      pCtx.translate(PW,0);pCtx.scale(-1,1);
-    }
-    pCtx.drawImage(sssFiligrane,fx,0,fw,fh);
-    pCtx.restore();
   }
   if(podcastState.text){
     const fs=PW*0.065;
@@ -647,12 +615,6 @@ function setPLogoColor(c){
   document.getElementById('p-logo-black').classList.toggle('active',c==='black');
   drawPodcastFrame();
 }
-function setPFilPos(pos){
-  podcastState.filigranePos=pos;
-  document.getElementById('p-fil-left').classList.toggle('active',pos==='left');
-  document.getElementById('p-fil-right').classList.toggle('active',pos==='right');
-  drawPodcastFrame();
-}
 function setPFormat(fmt){
   podcastState.format=fmt;
   document.getElementById('p-fmt-insta').classList.toggle('active',fmt==='instagram');
@@ -680,7 +642,6 @@ document.getElementById('p-bg-zoom').oninput=e=>{podcastState.bgZoom=+e.target.v
 document.getElementById('p-bg-pos-x').oninput=e=>{podcastState.bgPosX=+e.target.value;drawPodcastFrame();};
 document.getElementById('p-bg-pos-y').oninput=e=>{podcastState.bgPosY=+e.target.value;drawPodcastFrame();};
 document.getElementById('p-overlay-op').oninput=e=>{podcastState.overlayOpacity=+e.target.value;document.getElementById('p-overlay-val').textContent=e.target.value+'%';drawPodcastFrame();};
-document.getElementById('p-fil-op').oninput=e=>{podcastState.filigraneOpacity=+e.target.value/100;document.getElementById('p-fil-op-val').textContent=e.target.value+'%';drawPodcastFrame();};
 document.getElementById('p-text').oninput=e=>{podcastState.text=e.target.value;drawPodcastFrame();};
 
 function exportPodcastImage(){
