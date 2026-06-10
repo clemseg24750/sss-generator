@@ -192,7 +192,7 @@ canvas{display:block;width:100%;height:100%}
         <span class="range-val" id="dur-val">15s</span>
       </div>
     </div>
-    <div class="notice">⚡ FFmpeg (~20 MB) se charge à la première génération.<br>📁 MP4 H.264 · 1080×1350 · Instagram ready.</div>
+    <div class="notice">📁 MP4 H.264 · 720×900 · 24fps · Instagram ready.</div>
   </aside>
   <main class="main">
     <div class="canvas-wrap"><canvas id="cv"></canvas></div>
@@ -308,18 +308,15 @@ canvas{display:block;width:100%;height:100%}
   </div>
 </div>
 
-<!-- FFmpeg 0.11.x : pas de Worker externe, 100% inline -->
-<script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.11.6/dist/ffmpeg.min.js"></script>
-
 <script>
 const W=1080,H=1350;
+const EXPORT_W=720,EXPORT_H=900;
 const cv=document.getElementById('cv');
 cv.width=W;cv.height=H;
 const ctx=cv.getContext('2d');
 
 let bgImg=null,coverImg=null,audioBuffer=null,audioCtx=null;
 let previewRaf=null,previewT=0,previewLast=null;
-let ffmpegReady=false,ff=null;
 let previewSource=null,previewPlaying=false,audioStartContextTime=0;
 
 const elPreviewBtn=document.getElementById('preview-btn');
@@ -407,52 +404,54 @@ document.getElementById('f-artist').oninput=e=>{state.artist=e.target.value;};
 document.getElementById('f-title').oninput=e=>{state.title=e.target.value;};
 document.getElementById('f-label').oninput=e=>{state.label=e.target.value;};
 
-function drawFrame(t,totalDur){
-  ctx.clearRect(0,0,W,H);
+function drawFrame(t,totalDur,targetCtx){
+  const c=targetCtx||ctx;
+  const cw=c.canvas.width,ch=c.canvas.height;
+  c.clearRect(0,0,cw,ch);
   if(bgImg){
     const zoom=state.bgZoom/100;
     const posX=state.bgPosX/100,posY=state.bgPosY/100;
     const anim=1.03+0.015*Math.sin(t*0.25);
-    const coverScale=Math.max(W/bgImg.naturalWidth,H/bgImg.naturalHeight);
+    const coverScale=Math.max(cw/bgImg.naturalWidth,ch/bgImg.naturalHeight);
     const finalScale=coverScale*zoom*anim;
     const sw=bgImg.naturalWidth*finalScale,sh=bgImg.naturalHeight*finalScale;
-    ctx.drawImage(bgImg,(W-sw)*posX,(H-sh)*posY,sw,sh);
+    c.drawImage(bgImg,(cw-sw)*posX,(ch-sh)*posY,sw,sh);
   }else{
-    ctx.fillStyle='#0d0d0d';ctx.fillRect(0,0,W,H);
-    ctx.strokeStyle='rgba(255,255,255,0.04)';ctx.lineWidth=1;
-    ctx.beginPath();
-    for(let y=0;y<H;y+=60){ctx.moveTo(0,y);ctx.lineTo(W,y);}
-    for(let x=0;x<W;x+=60){ctx.moveTo(x,0);ctx.lineTo(x,H);}
-    ctx.stroke();
+    c.fillStyle='#0d0d0d';c.fillRect(0,0,cw,ch);
+    c.strokeStyle='rgba(255,255,255,0.04)';c.lineWidth=1;
+    c.beginPath();
+    for(let y=0;y<ch;y+=60){c.moveTo(0,y);c.lineTo(cw,y);}
+    for(let x=0;x<cw;x+=60){c.moveTo(x,0);c.lineTo(x,ch);}
+    c.stroke();
   }
   const artist=state.artist||'Artist';
   const title=state.title||'Track Title';
   const label=state.label||'Label';
-  const cs=640,cx=(W-cs)/2,cy=200;
+  const cs=640,cx=(cw-cs)/2,cy=200;
   if(coverImg){
-    ctx.save();ctx.beginPath();ctx.roundRect(cx,cy,cs,cs,16);ctx.clip();
-    ctx.drawImage(coverImg,cx,cy,cs,cs);ctx.restore();
-    ctx.strokeStyle='rgba(255,255,255,0.10)';ctx.lineWidth=2;
-    ctx.beginPath();ctx.roundRect(cx,cy,cs,cs,16);ctx.stroke();
+    c.save();c.beginPath();c.roundRect(cx,cy,cs,cs,16);c.clip();
+    c.drawImage(coverImg,cx,cy,cs,cs);c.restore();
+    c.strokeStyle='rgba(255,255,255,0.10)';c.lineWidth=2;
+    c.beginPath();c.roundRect(cx,cy,cs,cs,16);c.stroke();
   }else{
-    ctx.fillStyle='#1c1c1c';ctx.beginPath();ctx.roundRect(cx,cy,cs,cs,16);ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,0.18)';ctx.font='500 32px DM Sans,sans-serif';
-    ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('Cover',W/2,cy+cs/2);
+    c.fillStyle='#1c1c1c';c.beginPath();c.roundRect(cx,cy,cs,cs,16);c.fill();
+    c.fillStyle='rgba(255,255,255,0.18)';c.font='500 32px DM Sans,sans-serif';
+    c.textAlign='center';c.textBaseline='middle';c.fillText('Cover',cw/2,cy+cs/2);
   }
   const {rgb,opA,opT,opL}=state;
-  ctx.textAlign='center';ctx.textBaseline='alphabetic';
-  ctx.font='72px AkzidenzGroteskBE-LightEx,sans-serif';ctx.fillStyle=`rgba(${rgb},${opA})`;ctx.fillText(artist,W/2,cy+cs+110);
-  ctx.font='46px AkzidenzGroteskBE-LightEx,sans-serif';ctx.fillStyle=`rgba(${rgb},${opT})`;ctx.fillText(title,W/2,cy+cs+175);
-  ctx.font='26px AkzidenzGroteskBE-LightEx,sans-serif';ctx.fillStyle=`rgba(${rgb},${opL})`;ctx.fillText(label.toUpperCase(),W/2,cy+cs+230);
-  const barW=320,barH=3,barX=(W-barW)/2,barY=cy+cs+290;
-  ctx.fillStyle='rgba(255,255,255,0.10)';ctx.beginPath();ctx.roundRect(barX,barY,barW,barH,2);ctx.fill();
+  c.textAlign='center';c.textBaseline='alphabetic';
+  c.font='72px AkzidenzGroteskBE-LightEx,sans-serif';c.fillStyle=`rgba(${rgb},${opA})`;c.fillText(artist,cw/2,cy+cs+110);
+  c.font='46px AkzidenzGroteskBE-LightEx,sans-serif';c.fillStyle=`rgba(${rgb},${opT})`;c.fillText(title,cw/2,cy+cs+175);
+  c.font='26px AkzidenzGroteskBE-LightEx,sans-serif';c.fillStyle=`rgba(${rgb},${opL})`;c.fillText(label.toUpperCase(),cw/2,cy+cs+230);
+  const barW=320,barH=3,barX=(cw-barW)/2,barY=cy+cs+290;
+  c.fillStyle='rgba(255,255,255,0.10)';c.beginPath();c.roundRect(barX,barY,barW,barH,2);c.fill();
   const prog=totalDur>0?(t%totalDur)/totalDur:0;
-  ctx.fillStyle='rgba(255,255,255,0.75)';ctx.beginPath();ctx.roundRect(barX,barY,barW*prog,barH,2);ctx.fill();
-  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(barX+barW*prog,barY+barH/2,8,0,Math.PI*2);ctx.fill();
+  c.fillStyle='rgba(255,255,255,0.75)';c.beginPath();c.roundRect(barX,barY,barW*prog,barH,2);c.fill();
+  c.fillStyle='#fff';c.beginPath();c.arc(barX+barW*prog,barY+barH/2,8,0,Math.PI*2);c.fill();
   const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
-  ctx.font='400 22px DM Mono,monospace';ctx.fillStyle='rgba(255,255,255,0.22)';
-  ctx.textAlign='left';ctx.fillText(fmt(Math.floor(t%totalDur)),barX,barY+36);
-  ctx.textAlign='right';ctx.fillText(fmt(Math.floor(totalDur)),barX+barW,barY+36);
+  c.font='400 22px DM Mono,monospace';c.fillStyle='rgba(255,255,255,0.22)';
+  c.textAlign='left';c.fillText(fmt(Math.floor(t%totalDur)),barX,barY+36);
+  c.textAlign='right';c.fillText(fmt(Math.floor(totalDur)),barX+barW,barY+36);
 }
 
 function refreshPreview(){
@@ -677,48 +676,35 @@ function audioBufferToWav(buffer){
   return new Blob([ab],{type:'audio/wav'});
 }
 
-async function initFFmpeg(){
-  if(ffmpegReady)return;
-  setStatus('Chargement de FFmpeg (~20 MB)…');
-  const {createFFmpeg}=FFmpeg;
-  ff=createFFmpeg({
-    corePath:'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.11.0/dist/ffmpeg-core.js',
-    log:false,
-    progress:({ratio})=>{
-      const pct=Math.round(ratio*100);
-      elRecProg.style.width=(50+pct*0.48)+'%';
-      setStatus(`Encodage MP4… ${pct}%`);
-    }
-  });
-  await ff.load();
-  ffmpegReady=true;
-}
-
 async function startExport(){
   const {dur}=state;
-  const fps=30,totalFrames=dur*fps;
+  const fps=24,totalFrames=dur*fps;
   elRecBtn.disabled=true;
   stopAudioPreview();
   if(previewRaf){cancelAnimationFrame(previewRaf);previewRaf=null;}
 
-  try{await initFFmpeg();}
-  catch(e){setStatus('Erreur FFmpeg : '+e.message,'error');elRecBtn.disabled=false;refreshPreview();return;}
+  const exportCv=document.createElement('canvas');
+  exportCv.width=EXPORT_W;exportCv.height=EXPORT_H;
+  const exportCtx=exportCv.getContext('2d');
 
+  const formData=new FormData();
   setStatus('Rendu des frames…');
   for(let i=0;i<totalFrames;i++){
-    drawFrame(i/fps,dur);
-    const blob=await new Promise(res=>cv.toBlob(res,'image/jpeg',0.92));
-    ff.FS('writeFile',`f${String(i).padStart(5,'0')}.jpg`,new Uint8Array(await blob.arrayBuffer()));
+    drawFrame(i/fps,dur,exportCtx);
+    let blob=await new Promise(res=>exportCv.toBlob(res,'image/jpeg',0.92));
+    const fname=`f${String(i).padStart(5,'0')}.jpg`;
+    formData.append(fname,blob,fname);
+    blob=null;
     if(i%fps===0){
       elRecProg.style.width=(i/totalFrames*45)+'%';
       setStatus(`Rendu des frames… ${Math.round(i/totalFrames*100)}%`);
-      await new Promise(r=>setTimeout(r,0));
     }
+    await new Promise(r=>setTimeout(r,0));
   }
   elRecProg.style.width='48%';
 
   if(audioBuffer){
-    setStatus('Encodage audio…');
+    setStatus('Préparation audio…');
     const ls=state.loopStart;
     const ld=Math.min(dur,audioBuffer.duration-ls);
     const sr=audioBuffer.sampleRate,ns=Math.ceil(ld*sr);
@@ -726,45 +712,52 @@ async function startExport(){
     const src=offCtx.createBufferSource();
     src.buffer=audioBuffer;src.connect(offCtx.destination);src.start(0,ls);
     const rendered=await offCtx.startRendering();
-    ff.FS('writeFile','audio.wav',new Uint8Array(await audioBufferToWav(rendered).arrayBuffer()));
+    formData.append('audio',audioBufferToWav(rendered),'audio.wav');
   }
 
-  setStatus('Encodage H.264…');
+  const artist=(state.artist||'release').replace(/\s+/g,'_');
+  const title=(state.title||'video').replace(/\s+/g,'_');
+  formData.append('fps',String(fps));
+  formData.append('filename',`${artist}-${title}`);
+
+  setStatus('Envoi et encodage…');
   elRecProg.style.width='50%';
 
   try{
-    await ff.run(
-      '-framerate',String(fps),
-      '-i','f%05d.jpg',
-      ...(audioBuffer?['-i','audio.wav','-shortest']:[]),
-      '-vf',`scale=${W}:${H}`,
-      '-c:v','libx264',
-      '-preset','fast',
-      '-crf','20',
-      '-pix_fmt','yuv420p',
-      ...(audioBuffer?['-c:a','aac','-b:a','192k']:[]),
-      '-movflags','+faststart',
-      'out.mp4'
-    );
-  }catch(e){setStatus('Erreur encodage : '+e.message,'error');elRecBtn.disabled=false;refreshPreview();return;}
-
-  const data=ff.FS('readFile','out.mp4');
-  const url=URL.createObjectURL(new Blob([data.buffer],{type:'video/mp4'}));
-  const a=document.createElement('a');
-  const artist=(state.artist||'release').replace(/\s+/g,'_');
-  const title=(state.title||'video').replace(/\s+/g,'_');
-  a.download=`${artist}-${title}.mp4`;a.href=url;a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),5000);
-
-  elRecProg.style.width='100%';
-  setStatus('✓ MP4 téléchargé — prêt pour Instagram.','success');
-  elRecBtn.disabled=false;
-
-  for(let i=0;i<totalFrames;i++)try{ff.FS('unlink',`f${String(i).padStart(5,'0')}.jpg`);}catch(e){}
-  try{ff.FS('unlink','out.mp4');}catch(e){}
-  if(audioBuffer)try{ff.FS('unlink','audio.wav');}catch(e){}
-  setTimeout(()=>{elRecProg.style.width='0%';},3000);
-  refreshPreview();
+    await new Promise((resolve,reject)=>{
+      const xhr=new XMLHttpRequest();
+      xhr.open('POST','/export');
+      xhr.responseType='blob';
+      xhr.upload.onprogress=e=>{
+        if(e.lengthComputable)elRecProg.style.width=(50+e.loaded/e.total*40)+'%';
+      };
+      xhr.onload=()=>{
+        if(xhr.status===200){
+          const url=URL.createObjectURL(xhr.response);
+          const a=document.createElement('a');
+          a.download=`${artist}-${title}.mp4`;a.href=url;a.click();
+          setTimeout(()=>URL.revokeObjectURL(url),5000);
+          elRecProg.style.width='100%';
+          setStatus('✓ MP4 téléchargé — prêt pour Instagram.','success');
+          setTimeout(()=>{elRecProg.style.width='0%';},3000);
+          resolve();
+        }else{
+          xhr.response.text().then(t=>{
+            try{reject(new Error(JSON.parse(t).error));}
+            catch{reject(new Error(`Erreur serveur (${xhr.status})`));}
+          });
+        }
+      };
+      xhr.onerror=()=>reject(new Error('Erreur réseau'));
+      xhr.send(formData);
+    });
+  }catch(e){
+    setStatus('Erreur : '+e.message,'error');
+    elRecProg.style.width='0%';
+  }finally{
+    elRecBtn.disabled=false;
+    refreshPreview();
+  }
 }
 </script>
 </body>
