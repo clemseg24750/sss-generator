@@ -726,7 +726,7 @@ async function startExport(){
   try{
     await new Promise((resolve,reject)=>{
       const xhr=new XMLHttpRequest();
-      xhr.open('POST','https://sss-generator-production.up.railway.app/export');
+      xhr.open('POST','https://sss-generator.onrender.com/export');
       xhr.responseType='blob';
       xhr.upload.onprogress=e=>{
         if(e.lengthComputable)elRecProg.style.width=(50+e.loaded/e.total*40)+'%';
