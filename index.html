@@ -63,6 +63,18 @@ canvas{display:block;width:100%;height:100%}
 .audio-ok span{font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .notice{padding:10px 12px;background:#0a120a;border:1px solid #1a3a1a;border-radius:7px;font-family:var(--mono);font-size:10px;color:#4a8a4a;line-height:1.8}
 .color-pick.active{background:#fff;color:#000;border-color:#fff;font-weight:500}
+.btn.playing{border-color:rgba(74,222,128,.5);color:#4ade80}
+.btn.playing:hover{background:rgba(74,222,128,.06)}
+.tabs{border-bottom:1px solid var(--border);display:flex;padding:0 20px}
+.tab{background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;font-family:var(--sans);font-size:13px;padding:10px 14px;transition:color .15s,border-color .15s;margin-bottom:-1px}
+.tab:hover{color:var(--text)}
+.tab.active{border-bottom-color:rgba(255,255,255,.7);color:var(--text)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+.preset-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.preset-btn{border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--muted);font-family:var(--mono);font-size:10px;letter-spacing:.06em;padding:7px 4px;cursor:pointer;transition:all .15s;text-align:center}
+.preset-btn:hover{border-color:var(--border-h);color:var(--text)}
+.preset-btn.active{border-color:var(--border-h);color:var(--text);background:rgba(255,255,255,.06)}
 </style>
 </head>
 <body>
@@ -71,6 +83,11 @@ canvas{display:block;width:100%;height:100%}
   <div class="sep"></div>
   <h1>Post Generator</h1>
 </header>
+<nav class="tabs">
+  <button class="tab active" onclick="switchTab('video',this)">Vidéo</button>
+  <button class="tab" onclick="switchTab('podcast',this)">Podcast</button>
+</nav>
+<div id="tab-video" class="tab-panel active">
 <div class="app">
   <aside class="sidebar">
     <div class="sec-title">Visuels</div>
@@ -181,11 +198,130 @@ canvas{display:block;width:100%;height:100%}
     <div class="canvas-wrap"><canvas id="cv"></canvas></div>
     <div class="progress-bar"><div class="progress-fill" id="rec-prog"></div></div>
     <div class="btn-row">
-      <button class="btn" onclick="refreshPreview()">↺ Aperçu</button>
+      <button class="btn" id="preview-btn" onclick="togglePreview()" disabled>▶ Preview</button>
       <button class="btn primary" id="rec-btn" onclick="startExport()">⬇ Générer MP4</button>
     </div>
     <p class="status" id="status"></p>
   </main>
+</div>
+</div>
+
+<div id="tab-podcast" class="tab-panel">
+  <div class="app">
+    <aside class="sidebar">
+      <div class="sec-title">Visuels</div>
+      <div class="field-group">
+        <label>Background / Texture</label>
+        <div class="upload-zone">
+          <div class="uz-icon">🖼</div><img class="thumb" id="p-bg-thumb">
+          <div><div class="uz-title" id="p-bg-name">Choisir une image</div><div class="uz-sub">JPG PNG WEBP</div></div>
+          <input type="file" accept="image/*" id="p-bg-file">
+        </div>
+      </div>
+      <div class="field-group">
+        <label>BG — Position horizontale</label>
+        <div class="range-row">
+          <span class="range-lbl">G</span>
+          <input type="range" id="p-bg-pos-x" min="0" max="100" step="1" value="50">
+          <span class="range-lbl">D</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>BG — Position verticale</label>
+        <div class="range-row">
+          <span class="range-lbl">H</span>
+          <input type="range" id="p-bg-pos-y" min="0" max="100" step="1" value="50">
+          <span class="range-lbl">B</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>BG — Zoom</label>
+        <div class="range-row">
+          <input type="range" id="p-bg-zoom" min="100" max="200" step="1" value="100">
+          <span class="range-val" id="p-bg-zoom-val">100%</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Voile sombre</label>
+        <div class="range-row">
+          <input type="range" id="p-overlay-op" min="0" max="100" step="1" value="0">
+          <span class="range-val" id="p-overlay-val">0%</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec-title">Filigrane</div>
+      <div class="field-group">
+        <label>Position</label>
+        <div class="btn-row" style="max-width:none">
+          <button class="btn color-pick" id="p-fil-left" onclick="setPFilPos('left')" style="flex:1;justify-content:center">Gauche</button>
+          <button class="btn color-pick active" id="p-fil-right" onclick="setPFilPos('right')" style="flex:1;justify-content:center">Droite</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Opacité</label>
+        <div class="range-row">
+          <input type="range" id="p-fil-op" min="0" max="100" step="1" value="100">
+          <span class="range-val" id="p-fil-op-val">100%</span>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec-title">Texte</div>
+      <div class="field-group"><label>Contenu</label><input type="text" id="p-text" placeholder="Artiste / épisode"></div>
+      <div class="field-group">
+        <label>Couleur</label>
+        <div class="btn-row" style="max-width:none">
+          <button class="btn color-pick active" id="p-pick-white" onclick="setPTextColor('white')" style="flex:1;justify-content:center">Blanc</button>
+          <button class="btn color-pick" id="p-pick-black" onclick="setPTextColor('black')" style="flex:1;justify-content:center">Noir</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Position</label>
+        <div class="preset-grid">
+          <button class="preset-btn" data-pos="top-left" onclick="setPTextPos('top-left')">↖ Haut G</button>
+          <button class="preset-btn" data-pos="top-right" onclick="setPTextPos('top-right')">Haut D ↗</button>
+          <button class="preset-btn active" data-pos="center-left" onclick="setPTextPos('center-left')">← Centre G</button>
+          <button class="preset-btn" data-pos="center-right" onclick="setPTextPos('center-right')">Centre D →</button>
+          <button class="preset-btn" data-pos="bottom-left" onclick="setPTextPos('bottom-left')">↙ Bas G</button>
+          <button class="preset-btn" data-pos="bottom-right" onclick="setPTextPos('bottom-right')">Bas D ↘</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec-title">Logo</div>
+      <div class="field-group">
+        <label>Couleur</label>
+        <div class="btn-row" style="max-width:none">
+          <button class="btn color-pick active" id="p-logo-white" onclick="setPLogoColor('white')" style="flex:1;justify-content:center">Blanc</button>
+          <button class="btn color-pick" id="p-logo-black" onclick="setPLogoColor('black')" style="flex:1;justify-content:center">Noir</button>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Position</label>
+        <div class="preset-grid">
+          <button class="preset-btn" data-corner="top-left" onclick="setPLogoCorner('top-left')">↖ HG</button>
+          <button class="preset-btn" data-corner="top-right" onclick="setPLogoCorner('top-right')">HD ↗</button>
+          <button class="preset-btn active" data-corner="bottom-left" onclick="setPLogoCorner('bottom-left')">↙ BG</button>
+          <button class="preset-btn" data-corner="bottom-right" onclick="setPLogoCorner('bottom-right')">BD ↘</button>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="sec-title">Export</div>
+      <div class="field-group">
+        <label>Format</label>
+        <div class="btn-row" style="max-width:none">
+          <button class="btn color-pick active" id="p-fmt-insta" onclick="setPFormat('instagram')" style="flex:1;justify-content:center">Instagram</button>
+          <button class="btn color-pick" id="p-fmt-sc" onclick="setPFormat('soundcloud')" style="flex:1;justify-content:center">SoundCloud</button>
+        </div>
+      </div>
+      <div class="notice">📸 JPEG · 1080×1350 Instagram / 1400×1400 SoundCloud</div>
+    </aside>
+    <main class="main">
+      <div class="canvas-wrap" id="podcast-cv-wrap" style="aspect-ratio:4/5"><canvas id="pcv"></canvas></div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="exportPodcastImage()">⬇ Exporter JPEG</button>
+      </div>
+      <p class="status" id="podcast-status"></p>
+    </main>
+  </div>
 </div>
 
 <!-- FFmpeg 0.11.x : pas de Worker externe, 100% inline -->
@@ -200,6 +336,9 @@ const ctx=cv.getContext('2d');
 let bgImg=null,coverImg=null,audioBuffer=null,audioCtx=null;
 let previewRaf=null,previewT=0,previewLast=null;
 let ffmpegReady=false,ff=null;
+let previewSource=null,previewPlaying=false,audioStartContextTime=0;
+
+const elPreviewBtn=document.getElementById('preview-btn');
 
 // Cached DOM elements
 const elBgZoomVal=document.getElementById('bg-zoom-val');
@@ -230,7 +369,7 @@ const state={
 };
 
 const AGLightEx=new FontFace('AkzidenzGroteskBE-LightEx','url(fonts/AkzidenzGroteskBE-LightEx.otf)');
-AGLightEx.load().then(f=>{document.fonts.add(f);refreshPreview();});
+AGLightEx.load().then(f=>{document.fonts.add(f);refreshPreview();drawPodcastFrame();});
 
 function shortName(s,n=24){return s.length>n?s.slice(0,n-1)+'…':s;}
 function loadImg(file,cb){const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>cb(i);i.src=e.target.result;};r.readAsDataURL(file);}
@@ -263,6 +402,7 @@ document.getElementById('audio-file').onchange=async e=>{
     elAudioOk.style.display='flex';
     elAudioFname.textContent=shortName(f.name,32);
     elAudioName.textContent=shortName(f.name);
+    updatePreviewBtn();
   }catch(err){setStatus('Fichier audio non supporté.','error');}
 };
 
@@ -301,7 +441,6 @@ function drawFrame(t,totalDur){
     for(let x=0;x<W;x+=60){ctx.moveTo(x,0);ctx.lineTo(x,H);}
     ctx.stroke();
   }
-  ctx.fillStyle='rgba(0,0,0,0.52)';ctx.fillRect(0,0,W,H);
   const artist=state.artist||'Artist';
   const title=state.title||'Track Title';
   const label=state.label||'Label';
@@ -344,6 +483,222 @@ function refreshPreview(){
 }
 refreshPreview();
 
+function updatePreviewBtn(){
+  if(previewPlaying){
+    elPreviewBtn.textContent='■ Stop';elPreviewBtn.classList.add('playing');
+  }else{
+    elPreviewBtn.textContent='▶ Preview';elPreviewBtn.classList.remove('playing');
+  }
+  elPreviewBtn.disabled=!audioBuffer;
+}
+
+function stopAudioPreview(){
+  if(previewSource){try{previewSource.stop();}catch(e){}previewSource=null;}
+  previewPlaying=false;
+  updatePreviewBtn();
+}
+
+function startAudioPreview(){
+  stopAudioPreview();
+  if(!audioBuffer||!audioCtx)return;
+  if(audioCtx.state==='suspended')audioCtx.resume();
+  const ls=state.loopStart,dur=state.dur;
+  const ld=Math.min(dur,audioBuffer.duration-ls);
+  previewSource=audioCtx.createBufferSource();
+  previewSource.buffer=audioBuffer;
+  previewSource.connect(audioCtx.destination);
+  previewSource.start(0,ls,ld);
+  previewPlaying=true;
+  audioStartContextTime=audioCtx.currentTime;
+  previewSource.onended=()=>{
+    if(!previewPlaying)return;
+    previewPlaying=false;previewSource=null;
+    updatePreviewBtn();refreshPreview();
+  };
+  if(previewRaf){cancelAnimationFrame(previewRaf);previewRaf=null;}
+  function loop(){
+    const elapsed=audioCtx.currentTime-audioStartContextTime;
+    drawFrame(Math.min(elapsed,dur),dur);
+    if(elapsed<dur)previewRaf=requestAnimationFrame(loop);
+    else previewRaf=null;
+  }
+  previewRaf=requestAnimationFrame(loop);
+  updatePreviewBtn();
+}
+
+function togglePreview(){
+  if(previewPlaying){stopAudioPreview();refreshPreview();}
+  else startAudioPreview();
+}
+
+// ── PODCAST TAB ────────────────────────────────────────────────────
+const pcv=document.getElementById('pcv');
+const pCtx=pcv.getContext('2d');
+const elPodcastStatus=document.getElementById('podcast-status');
+const elPodcastCvWrap=document.getElementById('podcast-cv-wrap');
+
+let podcastBgImg=null,sssLogoImg=null,sssFiligrane=null;
+
+const _logo=new Image();
+_logo.onload=()=>{sssLogoImg=_logo;drawPodcastFrame();};
+_logo.src='sss-logo.jpg';
+
+const _fil=new Image();
+_fil.onload=()=>{sssFiligrane=_fil;drawPodcastFrame();};
+_fil.onerror=()=>{sssFiligrane=null;};
+_fil.src='sss-filigrane.png';
+
+const podcastState={
+  bgZoom:100,bgPosX:50,bgPosY:50,
+  overlayOpacity:0,
+  text:'',textRgb:'255,255,255',textPos:'center-left',
+  filigranePos:'right',filigraneOpacity:1,
+  logoColor:'white',logoCorner:'bottom-left',
+  format:'instagram'
+};
+
+function drawPodcastFrame(){
+  const PW=podcastState.format==='instagram'?1080:1400;
+  const PH=podcastState.format==='instagram'?1350:1400;
+  if(pcv.width!==PW||pcv.height!==PH){
+    pcv.width=PW;pcv.height=PH;
+    elPodcastCvWrap.style.aspectRatio=PW+'/'+PH;
+  }
+  pCtx.clearRect(0,0,PW,PH);
+  if(podcastBgImg){
+    const zoom=podcastState.bgZoom/100;
+    const posX=podcastState.bgPosX/100,posY=podcastState.bgPosY/100;
+    const cs=Math.max(PW/podcastBgImg.naturalWidth,PH/podcastBgImg.naturalHeight)*zoom;
+    const sw=podcastBgImg.naturalWidth*cs,sh=podcastBgImg.naturalHeight*cs;
+    pCtx.drawImage(podcastBgImg,(PW-sw)*posX,(PH-sh)*posY,sw,sh);
+  }else{
+    pCtx.fillStyle='#0d0d0d';pCtx.fillRect(0,0,PW,PH);
+  }
+  if(podcastState.overlayOpacity>0){
+    pCtx.fillStyle='rgba(0,0,0,'+podcastState.overlayOpacity/100+')';
+    pCtx.fillRect(0,0,PW,PH);
+  }
+  if(sssFiligrane){
+    const fh=PH,fw=fh*(sssFiligrane.naturalWidth/sssFiligrane.naturalHeight);
+    const fx=PW-fw*0.72;
+    pCtx.save();pCtx.globalAlpha=podcastState.filigraneOpacity;
+    if(podcastState.filigranePos==='left'){
+      pCtx.translate(PW,0);pCtx.scale(-1,1);
+    }
+    pCtx.drawImage(sssFiligrane,fx,0,fw,fh);
+    pCtx.restore();
+  }
+  if(podcastState.text){
+    const fs=PW*0.065;
+    pCtx.font=fs+'px AkzidenzGroteskBE-LightEx,sans-serif';
+    pCtx.fillStyle='rgba('+podcastState.textRgb+',1)';
+    const tpos={
+      'top-left'    :{x:PW*0.10,y:PH*0.18,a:'left'},
+      'top-right'   :{x:PW*0.90,y:PH*0.18,a:'right'},
+      'center-left' :{x:PW*0.10,y:PH*0.50,a:'left'},
+      'center-right':{x:PW*0.90,y:PH*0.50,a:'right'},
+      'bottom-left' :{x:PW*0.10,y:PH*0.82,a:'left'},
+      'bottom-right':{x:PW*0.90,y:PH*0.82,a:'right'},
+    };
+    const p=tpos[podcastState.textPos]||tpos['center-left'];
+    pCtx.textAlign=p.a;pCtx.textBaseline='middle';
+    pCtx.fillText(podcastState.text,p.x,p.y);
+  }
+  if(sssLogoImg){
+    const lw=PW*0.13,lh=lw*(sssLogoImg.naturalHeight/sssLogoImg.naturalWidth);
+    const pad=PW*0.06;
+    const cpos={
+      'top-left'    :{x:pad,y:pad},
+      'top-right'   :{x:PW-pad-lw,y:pad},
+      'bottom-left' :{x:pad,y:PH-pad-lh},
+      'bottom-right':{x:PW-pad-lw,y:PH-pad-lh},
+    };
+    const lp=cpos[podcastState.logoCorner]||cpos['bottom-left'];
+    pCtx.save();
+    if(podcastState.logoColor==='white'){
+      pCtx.filter='invert(1)';pCtx.globalCompositeOperation='screen';
+    }else{
+      pCtx.globalCompositeOperation='multiply';
+    }
+    pCtx.drawImage(sssLogoImg,lp.x,lp.y,lw,lh);
+    pCtx.restore();
+  }
+}
+
+function setPTextPos(pos){
+  podcastState.textPos=pos;
+  document.querySelectorAll('[data-pos]').forEach(b=>b.classList.toggle('active',b.dataset.pos===pos));
+  drawPodcastFrame();
+}
+function setPLogoCorner(corner){
+  podcastState.logoCorner=corner;
+  document.querySelectorAll('[data-corner]').forEach(b=>b.classList.toggle('active',b.dataset.corner===corner));
+  drawPodcastFrame();
+}
+function setPTextColor(c){
+  podcastState.textRgb=c==='black'?'0,0,0':'255,255,255';
+  document.getElementById('p-pick-white').classList.toggle('active',c==='white');
+  document.getElementById('p-pick-black').classList.toggle('active',c==='black');
+  drawPodcastFrame();
+}
+function setPLogoColor(c){
+  podcastState.logoColor=c;
+  document.getElementById('p-logo-white').classList.toggle('active',c==='white');
+  document.getElementById('p-logo-black').classList.toggle('active',c==='black');
+  drawPodcastFrame();
+}
+function setPFilPos(pos){
+  podcastState.filigranePos=pos;
+  document.getElementById('p-fil-left').classList.toggle('active',pos==='left');
+  document.getElementById('p-fil-right').classList.toggle('active',pos==='right');
+  drawPodcastFrame();
+}
+function setPFormat(fmt){
+  podcastState.format=fmt;
+  document.getElementById('p-fmt-insta').classList.toggle('active',fmt==='instagram');
+  document.getElementById('p-fmt-sc').classList.toggle('active',fmt==='soundcloud');
+  drawPodcastFrame();
+}
+function switchTab(name,btn){
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='podcast')drawPodcastFrame();
+  else refreshPreview();
+}
+
+document.getElementById('p-bg-file').onchange=e=>{
+  if(!e.target.files[0])return;
+  loadImg(e.target.files[0],img=>{podcastBgImg=img;drawPodcastFrame();});
+  const thumb=document.getElementById('p-bg-thumb');
+  if(thumb.src.startsWith('blob:'))URL.revokeObjectURL(thumb.src);
+  thumb.src=URL.createObjectURL(e.target.files[0]);thumb.style.display='block';
+  document.getElementById('p-bg-name').textContent=shortName(e.target.files[0].name);
+};
+document.getElementById('p-bg-zoom').oninput=e=>{podcastState.bgZoom=+e.target.value;document.getElementById('p-bg-zoom-val').textContent=e.target.value+'%';drawPodcastFrame();};
+document.getElementById('p-bg-pos-x').oninput=e=>{podcastState.bgPosX=+e.target.value;drawPodcastFrame();};
+document.getElementById('p-bg-pos-y').oninput=e=>{podcastState.bgPosY=+e.target.value;drawPodcastFrame();};
+document.getElementById('p-overlay-op').oninput=e=>{podcastState.overlayOpacity=+e.target.value;document.getElementById('p-overlay-val').textContent=e.target.value+'%';drawPodcastFrame();};
+document.getElementById('p-fil-op').oninput=e=>{podcastState.filigraneOpacity=+e.target.value/100;document.getElementById('p-fil-op-val').textContent=e.target.value+'%';drawPodcastFrame();};
+document.getElementById('p-text').oninput=e=>{podcastState.text=e.target.value;drawPodcastFrame();};
+
+function exportPodcastImage(){
+  drawPodcastFrame();
+  pcv.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download=(podcastState.text||'podcast').replace(/\s+/g,'_')+'-'+podcastState.format+'.jpg';
+    a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+    elPodcastStatus.textContent='✓ Image téléchargée.';
+    elPodcastStatus.className='status success';
+    setTimeout(()=>{elPodcastStatus.textContent='';},3000);
+  },'image/jpeg',0.95);
+}
+// ── END PODCAST ────────────────────────────────────────────────────
+
 function audioBufferToWav(buffer){
   const nc=buffer.numberOfChannels,sr=buffer.sampleRate,ns=buffer.length,bd=16;
   const byteRate=sr*nc*bd/8,ba=nc*bd/8,dataSize=ns*ba;
@@ -382,6 +737,7 @@ async function startExport(){
   const {dur}=state;
   const fps=30,totalFrames=dur*fps;
   elRecBtn.disabled=true;
+  stopAudioPreview();
   if(previewRaf){cancelAnimationFrame(previewRaf);previewRaf=null;}
 
   try{await initFFmpeg();}
@@ -424,6 +780,7 @@ async function startExport(){
       '-c:v','libx264',
       '-preset','fast',
       '-crf','20',
+      '-pix_fmt','yuv420p',
       ...(audioBuffer?['-c:a','aac','-b:a','192k']:[]),
       '-movflags','+faststart',
       'out.mp4'
