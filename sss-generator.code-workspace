@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../sss-generator-main"
+		},
+		{
+			"path": "fonts"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}

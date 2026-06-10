@@ -45,7 +45,7 @@ async function runExport(req, res) {
       ...(hasAudio ? ['-i', 'audio.wav', '-shortest'] : []),
       '-c:v', 'libx264',
       '-preset', 'fast',
-      '-crf', '20',
+      '-crf', '26',
       '-pix_fmt', 'yuv420p',
       ...(hasAudio ? ['-c:a', 'aac', '-b:a', '192k'] : []),
       '-movflags', '+faststart',
