@@ -730,7 +730,7 @@ async function startExport(){
   setStatus('Rendu des frames…');
   for(let i=0;i<totalFrames;i++){
     drawFrame(i/fps,dur,exportCtx);
-    let blob=await new Promise(res=>exportCv.toBlob(res,'image/jpeg',0.92));
+    let blob=await new Promise(res=>exportCv.toBlob(res,'image/jpeg',0.78));
     const fname=`f${String(i).padStart(5,'0')}.jpg`;
     formData.append(fname,blob,fname);
     blob=null;
