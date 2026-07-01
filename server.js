@@ -68,6 +68,8 @@ async function runExport(req, res) {
   }
 }
 
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
 app.post('/export', makeTmpDir, upload.any(), runExport);
 
 const PORT = process.env.PORT || 3000;
