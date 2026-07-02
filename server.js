@@ -5,9 +5,12 @@ const fs = require('fs');
 const { execFile } = require('child_process');
 const { promisify } = require('util');
 const os = require('os');
+const rateLimit = require('express-rate-limit');
 
 const execFileAsync = promisify(execFile);
 const app = express();
+
+let isProcessing = false;
 
 // ── CORS ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {
@@ -31,6 +34,22 @@ function makeTmpDir(req, res, next) {
   fs.mkdirSync(req.tmpDir, { recursive: true });
   next();
 }
+
+function checkProcessing(req, res, next) {
+  if (isProcessing) {
+    return res.status(503).json({ error: 'Serveur occupé — un encodage est en cours. Réessaie dans 30 secondes.' });
+  }
+  isProcessing = true;
+  next();
+}
+
+const exportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Limite atteinte — max 30 générations par heure par IP.' }
+});
 
 async function runExport(req, res) {
   const { tmpDir } = req;
@@ -65,12 +84,14 @@ async function runExport(req, res) {
         : (err.stderr || err.message);
       res.status(500).json({ error: msg });
     }
+  } finally {
+    isProcessing = false;
   }
 }
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-app.post('/export', makeTmpDir, upload.any(), runExport);
+app.post('/export', exportLimiter, checkProcessing, makeTmpDir, upload.any(), runExport);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`SSS Generator → http://localhost:${PORT}`));

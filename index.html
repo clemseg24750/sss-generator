@@ -824,12 +824,18 @@ async function startExport(){
           setTimeout(()=>URL.revokeObjectURL(url),5000);
           setStep('Téléchargement…',100);setStatus('✓ MP4 téléchargé — prêt pour Instagram.','success');
           setTimeout(()=>{elRecProg.style.width='0%';},3000);resolve();
+        }else if(xhr.status===503){
+          setStatus('⏳ Serveur occupé — réessaie dans 30s','error');
+          reject(new Error('__handled'));
+        }else if(xhr.status===429){
+          setStatus('🚫 Limite horaire atteinte — réessaie dans un moment.','error');
+          reject(new Error('__handled'));
         }else{xhr.response.text().then(t=>{try{reject(new Error(JSON.parse(t).error));}catch{reject(new Error(`Erreur serveur (${xhr.status})`));}});}
       };
       xhr.onerror=()=>reject(new Error('Erreur réseau'));
       xhr.send(formData);
     });
-  }catch(e){setStatus('Erreur : '+e.message,'error');elRecProg.style.width='0%';}
+  }catch(e){if(e.message!=='__handled'){setStatus('Erreur : '+e.message,'error');}elRecProg.style.width='0%';}
   finally{elRecBtn.disabled=!coverImg;refreshPreview();}
 }
 
