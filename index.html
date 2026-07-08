@@ -146,10 +146,9 @@ canvas{display:block;width:100%;height:100%}
     <div class="section-block">
     <div class="sec-title">Textes</div>
     <div class="field-group">
-      <label>Couleur des textes</label>
+      <label>Effet</label>
       <div class="btn-row" style="max-width:none">
-        <button class="btn color-pick active" id="pick-white" onclick="setTextColor('white')" style="flex:1;justify-content:center">Blanc</button>
-        <button class="btn color-pick" id="pick-black" onclick="setTextColor('black')" style="flex:1;justify-content:center">Noir</button>
+        <button class="btn" id="negative-btn" onclick="toggleNegative()" style="flex:1;justify-content:center">⬜ Négatif</button>
       </div>
     </div>
     <div class="field-group">
@@ -217,7 +216,9 @@ canvas{display:block;width:100%;height:100%}
     </div>
     <p class="status" id="cover-hint">Cover requise pour générer</p>
     <div class="notice notice-coldstart" id="wake-banner" style="display:none;max-width:440px">🌙 Le serveur se réveille… (~30s)</div>
+    <div class="notice notice-coldstart" id="busy-banner" style="display:none;max-width:440px">⚙️ Un encodage est en cours — tu seras mis en attente.</div>
     <p class="status" id="status"></p>
+    <span id="eta" style="display:none;font-size:11px;opacity:0.4;font-family:var(--mono)"></span>
   </main>
 </div>
 </div>
@@ -390,16 +391,31 @@ const elAudioOk=document.getElementById('audio-ok');
 const elAudioFname=document.getElementById('audio-fname');
 const elCoverHint=document.getElementById('cover-hint');
 const elWakeBanner=document.getElementById('wake-banner');
+const elBusyBanner=document.getElementById('busy-banner');
+const elEta=document.getElementById('eta');
 
-const state={bgZoom:100,bgPosX:50,bgPosY:50,artist:'',title:'',label:'',rgb:'255,255,255',opA:0.96,opT:0.60,opL:0.28,dur:15,loopStart:0};
+const state={bgZoom:100,bgPosX:50,bgPosY:50,artist:'',title:'',label:'',opA:0.96,opT:0.60,opL:0.28,dur:15,loopStart:0};
+let isNegative=false;
+let exportStartTime=0;
 
 const AGLightEx=new FontFace('EuropaGroteskSH-Med','url(fonts/EuropaGroteskSH-Med.otf)');
 AGLightEx.load().then(f=>{document.fonts.add(f);refreshPreview();drawPodcastFrame();});
 
 function shortName(s,n=24){return s.length>n?s.slice(0,n-1)+'…':s;}
 function loadImg(file,cb){const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>cb(i);i.src=e.target.result;};r.readAsDataURL(file);}
-function setStatus(msg,type=''){elStatus.textContent=msg;elStatus.className='status'+(type?' '+type:'');}
-function setStep(step,pct){elStatus.textContent=step;elStatus.className='status';elRecProg.style.width=pct+'%';}
+function setStatus(msg,type=''){elStatus.textContent=msg;elStatus.className='status'+(type?' '+type:'');if(type==='success'||type==='error')elEta.style.display='none';}
+function setStep(step,pct){
+  elStatus.textContent=step;elStatus.className='status';elRecProg.style.width=pct+'%';
+  if(pct>5&&pct<95){
+    const elapsed=(Date.now()-exportStartTime)/1000;
+    const estimated=elapsed/(pct/100);
+    const remaining=Math.round(estimated-elapsed);
+    elEta.textContent='~'+remaining+'s restantes';
+    elEta.style.display='block';
+  }else{
+    elEta.style.display='none';
+  }
+}
 function updateGenerateBtn(){elRecBtn.disabled=!coverImg;elCoverHint.style.display=coverImg?'none':'block';}
 
 document.getElementById('bg-file').onchange=e=>{
@@ -441,7 +457,7 @@ document.getElementById('dur-range').oninput=e=>{state.dur=+e.target.value;elDur
 document.getElementById('op-artist').oninput=e=>{state.opA=+e.target.value/100;elOpArtistVal.textContent=e.target.value+'%';};
 document.getElementById('op-title').oninput=e=>{state.opT=+e.target.value/100;elOpTitleVal.textContent=e.target.value+'%';};
 document.getElementById('op-label').oninput=e=>{state.opL=+e.target.value/100;elOpLabelVal.textContent=e.target.value+'%';};
-function setTextColor(c){state.rgb=c==='black'?'0,0,0':'255,255,255';document.getElementById('pick-white').classList.toggle('active',c==='white');document.getElementById('pick-black').classList.toggle('active',c==='black');}
+function toggleNegative(){isNegative=!isNegative;document.getElementById('negative-btn').textContent=isNegative?'⬛ Négatif':'⬜ Négatif';}
 document.getElementById('f-artist').oninput=e=>{state.artist=e.target.value;localStorage.setItem('sss-artist',e.target.value);};
 document.getElementById('f-title').oninput=e=>{state.title=e.target.value;localStorage.setItem('sss-title',e.target.value);};
 document.getElementById('f-label').oninput=e=>{state.label=e.target.value;localStorage.setItem('sss-label',e.target.value);};
@@ -495,6 +511,8 @@ function drawFrame(t,totalDur,targetCtx){
   const cw=c.canvas.width,ch=c.canvas.height;
   const sc=cw/W;
   c.clearRect(0,0,cw,ch);
+  c.save();
+  if(isNegative)c.filter='invert(1)';
   if(bgImg){
     const zoom=state.bgZoom/100,posX=state.bgPosX/100,posY=state.bgPosY/100;
     const anim=1.03+0.015*Math.sin(t*0.25);
@@ -503,6 +521,7 @@ function drawFrame(t,totalDur,targetCtx){
     const sw=bgImg.naturalWidth*finalScale,sh=bgImg.naturalHeight*finalScale;
     c.drawImage(bgImg,(cw-sw)*posX,(ch-sh)*posY,sw,sh);
   }else{c.fillStyle='#0d0d0d';c.fillRect(0,0,cw,ch);}
+  c.restore();
   const artist=state.artist||'Artist',title=state.title||'Track Title',label=state.label||'Label';
   const cs=640*sc,cx=(cw-cs)/2,cy=200*sc,rad=16*sc;
   if(coverImg){
@@ -515,7 +534,8 @@ function drawFrame(t,totalDur,targetCtx){
     c.fillStyle='rgba(255,255,255,0.18)';c.font=`500 ${32*sc}px DM Sans,sans-serif`;
     c.textAlign='center';c.textBaseline='middle';c.fillText('Cover',cw/2,cy+cs/2);
   }
-  const {rgb,opA,opT,opL}=state;
+  const {opA,opT,opL}=state;
+  const rgb=isNegative?'0,0,0':'255,255,255';
   c.textAlign='center';c.textBaseline='alphabetic';
   c.font=`${72*sc}px EuropaGroteskSH-Med,sans-serif`;c.fillStyle=`rgba(${rgb},${opA})`;fillTextStretched(c,artist,cw/2,cy+cs+110*sc);
   c.font=`${46*sc}px EuropaGroteskSH-Med,sans-serif`;c.fillStyle=`rgba(${rgb},${opT})`;fillTextStretched(c,title,cw/2,cy+cs+175*sc);
@@ -526,7 +546,7 @@ function drawFrame(t,totalDur,targetCtx){
   c.fillStyle=`rgba(${rgb},0.75)`;c.beginPath();c.roundRect(barX,barY,barW*prog,barH,2*sc);c.fill();
   c.fillStyle=`rgba(${rgb},1)`;c.beginPath();c.arc(barX+barW*prog,barY+barH/2,8*sc,0,Math.PI*2);c.fill();
   const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
-  c.font=`400 ${22*sc}px DM Mono,monospace`;c.fillStyle='rgba(255,255,255,0.22)';
+  c.font=`400 ${22*sc}px DM Mono,monospace`;c.fillStyle=`rgba(${rgb},0.22)`;
   c.textAlign='left';c.fillText(fmt(Math.floor(t%totalDur)),barX,barY+36*sc);
   c.textAlign='right';c.fillText(fmt(Math.floor(totalDur)),barX+barW,barY+36*sc);
 }
@@ -774,9 +794,16 @@ async function checkServerHealth(){
   catch(e){}
   clearTimeout(showTimer);clearTimeout(abortTimer);
   elWakeBanner.style.display='none';
+  elBusyBanner.style.display='none';
+  try{
+    const res=await fetch('https://sss-generator.onrender.com/status',{method:'GET'});
+    const data=await res.json();
+    if(data.processing===true)elBusyBanner.style.display='block';
+  }catch(e){}
 }
 
 async function startExport(){
+  exportStartTime=Date.now();
   if(!coverImg){setStatus('Ajoute une cover pour continuer.','error');return;}
   const {dur}=state;
   const fps=24,totalFrames=dur*fps;
