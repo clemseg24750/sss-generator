@@ -98,6 +98,12 @@ canvas{display:block;width:100%;height:100%}
 .batch-row .gen-status{font-family:var(--mono);font-size:11px;white-space:nowrap}
 .batch-row .gen-status.done{color:#4ade80}
 .batch-row .gen-status.failed{color:#f87171}
+.batch-wave{display:flex;align-items:center;gap:8px;margin:-2px 0 0 0;padding:0 2px}
+.wave-play{border:1px solid var(--border-h);border-radius:6px;background:transparent;color:var(--text);font-size:11px;padding:4px 9px;cursor:pointer;flex-shrink:0}
+.wave-play:hover{background:var(--surface2)}
+.wave-canvas-wrap{flex:1;min-width:0}
+.wave-cv{width:100%;height:40px;display:block;border-radius:4px;cursor:grab;touch-action:none}
+.wave-time{font-family:var(--mono);font-size:10px;color:var(--muted);margin:2px 0 6px 44px}
 </style>
 </head>
 <body>
@@ -843,7 +849,8 @@ function switchTab(name,btn){
 }
 
 // ── BATCH ─────────────────────────────────────
-let batchCovers=[],batchAudios=[],batchPairs=[],batchBgByBase={};
+let batchCovers=[],batchAudios=[],batchPairs=[],batchBgByBase={},batchLoopStartByBase={};
+function batchFmtTime(s){return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;}
 function batchBaseName(f){return f.name.replace(/\.[^.]+$/,'');}
 function renderBatchFileList(files,elId){
   document.getElementById(elId).innerHTML=files.map(f=>`<div>${f.name}</div>`).join('');
@@ -882,7 +889,7 @@ function batchRebuildPairs(){
     const cover=coverByBase[base],audio=audioByBase[base];
     const parts=base.split(' - ');
     const artist=parts[0]?.trim()||base,title=parts[1]?.trim()||'',label=parts[2]?.trim();
-    return {base,cover,audio,artist,title,label,bg:batchBgByBase[base]||null,ok:!!(cover&&audio)};
+    return {base,cover,audio,artist,title,label,bg:batchBgByBase[base]||null,loopStart:batchLoopStartByBase[base]||0,ok:!!(cover&&audio)};
   });
   updateBatchGenerateBtn();
   const needBg=batchPairs.filter(p=>p.ok&&!p.bg);
@@ -903,13 +910,160 @@ function batchRenderPairs(){
     const nameParts=[p.artist,p.title,p.label].filter(Boolean);
     const genStatus=p.status==='done'?'<span class="gen-status done">✓ Généré</span>'
       :p.status==='failed'?'<span class="gen-status failed">✗ Échec — serveur occupé</span>':'';
-    return `<div class="batch-row${p.status==='failed'?' failed':''}">${thumb}${bgThumb}<span>${nameParts.join(' — ')}</span><span class="bg-tag">${bgTag}</span>${genStatus}</div>`;
+    const row=`<div class="batch-row${p.status==='failed'?' failed':''}">${thumb}${bgThumb}<span>${nameParts.join(' — ')}</span><span class="bg-tag">${bgTag}</span>${genStatus}</div>`;
+    const wave=p.audio?`<div class="batch-wave">
+        <button class="wave-play" id="batch-wave-play-${idx}" onclick="batchToggleAudioPreview(${idx})">▶</button>
+        <div class="wave-canvas-wrap"><canvas class="wave-cv" id="batch-wave-cv-${idx}"></canvas></div>
+      </div>
+      <div class="wave-time" id="batch-wave-time-${idx}"></div>`:'';
+    return row+wave;
   }).join('');
+  batchPairs.forEach((p,idx)=>{if(p.ok&&p.audio)batchInitWaveform(idx);});
 }
 function updateBatchGenerateBtn(){
   const hasValid=batchPairs.some(p=>p.ok);
   const hasError=batchPairs.some(p=>!p.ok);
   document.getElementById('batch-generate-btn').disabled=!(hasValid&&!hasError);
+}
+async function batchGetDecodedBuffer(p){
+  if(p.decodedBuffer)return p.decodedBuffer;
+  if(!p.audio)return null;
+  try{
+    audioCtx=audioCtx||new AudioContext();
+    p.decodedBuffer=await audioCtx.decodeAudioData(await p.audio.arrayBuffer());
+    return p.decodedBuffer;
+  }catch(e){return null;}
+}
+function batchUpdateTimecode(idx){
+  const p=batchPairs[idx];
+  const el=document.getElementById(`batch-wave-time-${idx}`);
+  if(!p||!el||!p.decodedBuffer)return;
+  const winLen=Math.min(30,p.decodedBuffer.duration);
+  el.textContent=`${batchFmtTime(p.loopStart)} — ${batchFmtTime(p.loopStart+winLen)}`;
+}
+function batchUpdatePlayBtn(idx){
+  const btn=document.getElementById(`batch-wave-play-${idx}`);
+  const p=batchPairs[idx];
+  if(btn)btn.textContent=p&&p._playSource?'■':'▶';
+}
+function batchRedrawWaveform(idx,playheadRatio){
+  const p=batchPairs[idx];
+  const cv=document.getElementById(`batch-wave-cv-${idx}`);
+  if(!p||!cv||!p.decodedBuffer)return;
+  const ctx=cv.getContext('2d');
+  const w=cv.width,h=cv.height;
+  const data=p.decodedBuffer.getChannelData(0);
+  ctx.clearRect(0,0,w,h);
+  ctx.fillStyle='rgba(255,255,255,0.05)';ctx.fillRect(0,0,w,h);
+  ctx.fillStyle='rgba(255,255,255,0.3)';
+  const step=Math.max(1,Math.floor(data.length/w));
+  const mid=h/2;
+  for(let x=0;x<w;x++){
+    let min=1,max=-1;
+    const base=x*step;
+    for(let j=0;j<step;j++){
+      const v=data[base+j];
+      if(v===undefined)continue;
+      if(v<min)min=v;
+      if(v>max)max=v;
+    }
+    if(max<min){min=0;max=0;}
+    const y1=mid+min*mid,y2=mid+max*mid;
+    ctx.fillRect(x,Math.min(y1,y2),1,Math.max(1,Math.abs(y2-y1)));
+  }
+  const dur=p.decodedBuffer.duration;
+  const winLen=Math.min(30,dur);
+  const startRatio=dur>0?p.loopStart/dur:0;
+  const widthRatio=dur>0?winLen/dur:1;
+  const x=startRatio*w,ww=Math.max(2,widthRatio*w);
+  ctx.fillStyle='rgba(255,255,255,0.15)';ctx.fillRect(x,0,ww,h);
+  ctx.strokeStyle='rgba(255,255,255,0.9)';ctx.lineWidth=2;
+  ctx.strokeRect(x+1,1,Math.max(0,ww-2),h-2);
+  if(typeof playheadRatio==='number'){
+    const px=playheadRatio*w;
+    ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,h);ctx.stroke();
+  }
+}
+function batchAttachWaveformDrag(idx,cv,buf){
+  let dragging=false,startX=0,startLoop=0;
+  const dur=buf.duration;
+  const maxStart=Math.max(0,dur-Math.min(30,dur));
+  cv.onpointerdown=e=>{
+    dragging=true;startX=e.clientX;startLoop=batchPairs[idx].loopStart;
+    cv.setPointerCapture(e.pointerId);
+  };
+  cv.onpointermove=e=>{
+    if(!dragging)return;
+    const rect=cv.getBoundingClientRect();
+    const deltaRatio=(e.clientX-startX)/rect.width;
+    let newStart=startLoop+deltaRatio*dur;
+    newStart=Math.max(0,Math.min(maxStart,newStart));
+    batchPairs[idx].loopStart=newStart;
+    batchLoopStartByBase[batchPairs[idx].base]=newStart;
+    batchRedrawWaveform(idx);
+    batchUpdateTimecode(idx);
+  };
+  const stop=()=>{dragging=false;};
+  cv.onpointerup=()=>{
+    dragging=false;
+    const p=batchPairs[idx];
+    if(p&&p._playSource){
+      try{p._playSource.stop();}catch(e){}
+      p._playSource=null;
+      if(p._playRaf){cancelAnimationFrame(p._playRaf);p._playRaf=null;}
+      batchToggleAudioPreview(idx);
+    }
+  };
+  cv.onpointercancel=stop;cv.onpointerleave=stop;
+}
+async function batchInitWaveform(idx){
+  const p=batchPairs[idx];
+  if(!p||!p.ok||!p.audio)return;
+  const cv=document.getElementById(`batch-wave-cv-${idx}`);
+  if(!cv)return;
+  cv.width=cv.clientWidth||300;cv.height=40;
+  const buf=await batchGetDecodedBuffer(p);
+  if(!buf)return;
+  batchRedrawWaveform(idx);
+  batchUpdateTimecode(idx);
+  batchAttachWaveformDrag(idx,cv,buf);
+}
+async function batchToggleAudioPreview(idx){
+  const p=batchPairs[idx];
+  if(!p||!p.decodedBuffer)return;
+  if(p._playSource){
+    try{p._playSource.stop();}catch(e){}
+    p._playSource=null;
+    if(p._playRaf){cancelAnimationFrame(p._playRaf);p._playRaf=null;}
+    batchRedrawWaveform(idx);
+    batchUpdatePlayBtn(idx);
+    return;
+  }
+  const buf=p.decodedBuffer;
+  audioCtx=audioCtx||new AudioContext();
+  if(audioCtx.state==='suspended')audioCtx.resume();
+  const ld=Math.min(30,buf.duration-p.loopStart);
+  const src=audioCtx.createBufferSource();
+  src.buffer=buf;src.connect(audioCtx.destination);
+  src.start(0,p.loopStart,ld);
+  const startCtxTime=audioCtx.currentTime;
+  p._playSource=src;
+  batchUpdatePlayBtn(idx);
+  src.onended=()=>{
+    if(p._playSource!==src)return;
+    p._playSource=null;
+    if(p._playRaf){cancelAnimationFrame(p._playRaf);p._playRaf=null;}
+    batchRedrawWaveform(idx);
+    batchUpdatePlayBtn(idx);
+  };
+  const loop=()=>{
+    const elapsed=audioCtx.currentTime-startCtxTime;
+    const ratio=(p.loopStart+Math.min(elapsed,ld))/buf.duration;
+    batchRedrawWaveform(idx,ratio);
+    if(elapsed<ld)p._playRaf=requestAnimationFrame(loop);
+  };
+  p._playRaf=requestAnimationFrame(loop);
 }
 function batchGenerateAll(){startBatchExport();}
 function loadImageFromFile(file){
@@ -955,12 +1109,12 @@ async function batchExportOnePair(p,idx,total){
   }
   isNegative=savedNegative;
   if(p.audio){
-    audioCtx=audioCtx||new AudioContext();
-    const buf=await audioCtx.decodeAudioData(await p.audio.arrayBuffer());
-    const ld=Math.min(dur,buf.duration);
+    const buf=await batchGetDecodedBuffer(p);
+    const ls=p.loopStart||0;
+    const ld=Math.min(dur,buf.duration-ls);
     const sr=buf.sampleRate,ns=Math.ceil(ld*sr);
     const offCtx=new OfflineAudioContext(2,ns,sr);
-    const src=offCtx.createBufferSource();src.buffer=buf;src.connect(offCtx.destination);src.start(0,0);
+    const src=offCtx.createBufferSource();src.buffer=buf;src.connect(offCtx.destination);src.start(0,ls);
     const rendered=await offCtx.startRendering();
     formData.append('audio',audioBufferToWav(rendered),'audio.wav');
   }
