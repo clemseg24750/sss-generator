@@ -10,6 +10,8 @@ const rateLimit = require('express-rate-limit');
 const execFileAsync = promisify(execFile);
 const app = express();
 
+const BACKGROUNDS_DIR = path.join(__dirname, 'public', 'backgrounds');
+
 let isProcessing = false;
 
 // ── CORS ──────────────────────────────────────────────────────────
@@ -22,6 +24,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.static(__dirname));
+app.use('/backgrounds', express.static(BACKGROUNDS_DIR));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, req.tmpDir),
@@ -94,6 +97,20 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 app.get('/status', (req, res) => {
   if (isProcessing) return res.json({ status: 'busy', processing: true });
   res.json({ status: 'idle', processing: false });
+});
+
+app.get('/backgrounds/random', (req, res) => {
+  const files = fs.readdirSync(BACKGROUNDS_DIR).filter(f => f.endsWith('.jpg'));
+  const filtered = req.query.mode
+    ? files.filter(f => f.startsWith(req.query.mode + '_'))
+    : files;
+  const filename = filtered[Math.floor(Math.random() * filtered.length)];
+  res.json({ filename, url: `/backgrounds/${filename}` });
+});
+
+app.get('/backgrounds/list', (req, res) => {
+  const backgrounds = fs.readdirSync(BACKGROUNDS_DIR).filter(f => f.toLowerCase().endsWith('.jpg'));
+  res.json({ backgrounds, total: backgrounds.length });
 });
 
 app.post('/export', exportLimiter, checkProcessing, makeTmpDir, upload.any(), runExport);

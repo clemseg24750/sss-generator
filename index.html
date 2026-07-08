@@ -104,6 +104,11 @@ canvas{display:block;width:100%;height:100%}
         <div><div class="uz-title" id="bg-name">Choisir une image</div><div class="uz-sub">JPG PNG WEBP</div></div>
         <input type="file" accept="image/*" id="bg-file">
       </div>
+      <button class="btn" id="bg-random-btn" onclick="pickRandomBackground()" style="width:100%;justify-content:center;margin-top:8px">🎲 Background aléatoire</button>
+      <div id="bg-random-preview" style="display:none;align-items:center;gap:8px;margin-top:6px">
+        <img id="bg-random-thumb" style="width:34px;height:34px;object-fit:cover;border-radius:4px">
+        <span id="bg-random-name" style="font-family:var(--mono);font-size:11px;opacity:0.4"></span>
+      </div>
     </div>
     <div class="field-group">
       <label>BG — Position horizontale</label>
@@ -394,8 +399,10 @@ const elWakeBanner=document.getElementById('wake-banner');
 const elBusyBanner=document.getElementById('busy-banner');
 const elEta=document.getElementById('eta');
 
+const BASE_URL=['localhost','127.0.0.1',''].includes(window.location.hostname)?'http://localhost:3000':'https://sss-generator.onrender.com';
 const state={bgZoom:100,bgPosX:50,bgPosY:50,artist:'',title:'',label:'',opA:0.96,opT:0.60,opL:0.28,dur:15,loopStart:0};
 let isNegative=false;
+let bgIsRandom=false;
 let exportStartTime=0;
 
 const AGLightEx=new FontFace('EuropaGroteskSH-Med','url(fonts/EuropaGroteskSH-Med.otf)');
@@ -425,7 +432,29 @@ document.getElementById('bg-file').onchange=e=>{
   if(t.src.startsWith('blob:'))URL.revokeObjectURL(t.src);
   t.src=URL.createObjectURL(e.target.files[0]);t.style.display='block';
   document.getElementById('bg-name').textContent=shortName(e.target.files[0].name);
+  document.getElementById('bg-random-preview').style.display='none';
+  bgIsRandom=false;
 };
+function pickRandomBackground(){
+  fetch(`${BASE_URL}/backgrounds/random?mode=${isNegative?'white':'black'}`)
+    .then(r=>r.json())
+    .then(({filename,url})=>{
+      const absUrl=BASE_URL+url;
+      const img=new Image();
+      img.crossOrigin='anonymous';
+      img.onload=()=>{
+        bgImg=img;
+        bgIsRandom=true;
+        const thumb=document.getElementById('bg-random-thumb');
+        thumb.src=absUrl;
+        document.getElementById('bg-random-name').textContent=filename;
+        document.getElementById('bg-random-preview').style.display='flex';
+        refreshPreview();
+      };
+      img.src=absUrl;
+    })
+    .catch(()=>setStatus('Erreur — impossible de charger un background aléatoire.','error'));
+}
 document.getElementById('cover-file').onchange=e=>{
   if(!e.target.files[0])return;
   loadImg(e.target.files[0],img=>{coverImg=img;updateGenerateBtn();});
@@ -457,7 +486,7 @@ document.getElementById('dur-range').oninput=e=>{state.dur=+e.target.value;elDur
 document.getElementById('op-artist').oninput=e=>{state.opA=+e.target.value/100;elOpArtistVal.textContent=e.target.value+'%';};
 document.getElementById('op-title').oninput=e=>{state.opT=+e.target.value/100;elOpTitleVal.textContent=e.target.value+'%';};
 document.getElementById('op-label').oninput=e=>{state.opL=+e.target.value/100;elOpLabelVal.textContent=e.target.value+'%';};
-function toggleNegative(){isNegative=!isNegative;document.getElementById('negative-btn').textContent=isNegative?'⬛ Négatif':'⬜ Négatif';}
+function toggleNegative(){isNegative=!isNegative;document.getElementById('negative-btn').textContent=isNegative?'⬛ Négatif':'⬜ Négatif';if(bgIsRandom)pickRandomBackground();}
 document.getElementById('f-artist').oninput=e=>{state.artist=e.target.value;localStorage.setItem('sss-artist',e.target.value);};
 document.getElementById('f-title').oninput=e=>{state.title=e.target.value;localStorage.setItem('sss-title',e.target.value);};
 document.getElementById('f-label').oninput=e=>{state.label=e.target.value;localStorage.setItem('sss-label',e.target.value);};
@@ -790,13 +819,13 @@ async function checkServerHealth(){
   const showTimer=setTimeout(()=>{elWakeBanner.style.display='block';},3000);
   const controller=new AbortController();
   const abortTimer=setTimeout(()=>controller.abort(),60000);
-  try{await fetch('https://sss-generator.onrender.com/health',{method:'GET',signal:controller.signal});}
+  try{await fetch(`${BASE_URL}/health`,{method:'GET',signal:controller.signal});}
   catch(e){}
   clearTimeout(showTimer);clearTimeout(abortTimer);
   elWakeBanner.style.display='none';
   elBusyBanner.style.display='none';
   try{
-    const res=await fetch('https://sss-generator.onrender.com/status',{method:'GET'});
+    const res=await fetch(`${BASE_URL}/status`,{method:'GET'});
     const data=await res.json();
     if(data.processing===true)elBusyBanner.style.display='block';
   }catch(e){}
@@ -841,7 +870,7 @@ async function startExport(){
   try{
     await new Promise((resolve,reject)=>{
       const xhr=new XMLHttpRequest();
-      xhr.open('POST','https://sss-generator.onrender.com/export');xhr.responseType='blob';
+      xhr.open('POST',`${BASE_URL}/export`);xhr.responseType='blob';
       xhr.upload.onprogress=e=>{if(e.lengthComputable)setStep('Encodage FFmpeg…',55+e.loaded/e.total*40);};
       xhr.onload=()=>{
         if(xhr.status===200){
