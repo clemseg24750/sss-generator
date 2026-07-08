@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>SSS | Post Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -78,6 +79,25 @@ canvas{display:block;width:100%;height:100%}
 .btn.playing:hover{background:rgba(74,222,128,.06)}
 .progress-bar{height:2px;background:var(--border);border-radius:1px;overflow:hidden;margin-top:6px;width:100%;max-width:440px}
 .progress-fill{height:100%;width:0%;background:#fff;border-radius:1px;transition:width .1s linear}
+.tab-group{display:flex;align-items:center;border:1px solid var(--border-h);border-radius:6px;overflow:hidden;margin:8px 0}
+.tab-group .tab{border:none;border-radius:0;margin:0;padding:8px 14px}
+.tab-group .tab:first-child{border-right:1px solid var(--border-h)}
+.tab-group .tab:hover{background:var(--surface2)}
+.tab-group .tab.active{background:var(--surface2)}
+.tab-sep{color:var(--muted);margin:0 16px;user-select:none}
+.batch-file-list{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.8;max-height:90px;overflow-y:auto}
+.batch-pairs{display:flex;flex-direction:column;gap:8px;width:100%;max-width:640px}
+.batch-row{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px}
+.batch-row.warn{border-color:rgba(251,146,60,0.4);color:#fb923c}
+.batch-row.failed{border-color:rgba(248,113,113,0.4)}
+.batch-row img{width:34px;height:34px;object-fit:cover;border-radius:4px;flex-shrink:0;background:var(--surface2)}
+.batch-thumb-empty{width:34px;height:34px;border-radius:4px;flex-shrink:0;background:var(--surface2)}
+.bg-thumb{cursor:pointer;transition:opacity .15s}
+.bg-thumb:hover{opacity:.7}
+.batch-row .bg-tag{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted);white-space:nowrap}
+.batch-row .gen-status{font-family:var(--mono);font-size:11px;white-space:nowrap}
+.batch-row .gen-status.done{color:#4ade80}
+.batch-row .gen-status.failed{color:#f87171}
 </style>
 </head>
 <body>
@@ -87,7 +107,11 @@ canvas{display:block;width:100%;height:100%}
   <h1>Post Generator</h1>
 </header>
 <nav class="tabs">
-  <button class="tab active" onclick="switchTab('video',this)">Vidéo</button>
+  <div class="tab-group">
+    <button class="tab active" onclick="switchTab('video',this)">Vidéo</button>
+    <button class="tab" onclick="switchTab('batch',this)">Batch</button>
+  </div>
+  <span class="tab-sep">|</span>
   <button class="tab" onclick="switchTab('podcast',this)">Podcast</button>
 </nav>
 
@@ -356,6 +380,57 @@ canvas{display:block;width:100%;height:100%}
       <button class="btn primary" onclick="exportPodcastImage()">⬇ Exporter JPEG</button>
     </div>
     <p class="status" id="podcast-status"></p>
+  </main>
+</div>
+</div>
+
+<!-- ═══════════════ TAB BATCH ═══════════════ -->
+<div id="tab-batch" class="tab-panel">
+<div class="app">
+  <aside class="sidebar">
+    <div class="section-block">
+    <div class="sec-title">Covers</div>
+    <div class="field-group">
+      <label>Covers (multiple)</label>
+      <div class="upload-zone">
+        <div class="uz-icon">💿</div>
+        <div><div class="uz-title" id="batch-covers-name">Choisir des images</div><div class="uz-sub">JPG PNG WEBP</div></div>
+        <input type="file" accept="image/*" id="batch-covers-file" multiple>
+      </div>
+      <div class="batch-file-list" id="batch-covers-list"></div>
+    </div>
+    </div>
+    <div class="section-block">
+    <div class="sec-title">Audios</div>
+    <div class="field-group">
+      <label>Extraits audio (multiple)</label>
+      <div class="upload-zone">
+        <div class="uz-icon">🎵</div>
+        <div><div class="uz-title" id="batch-audios-name">Choisir des fichiers</div><div class="uz-sub">MP3 WAV AAC</div></div>
+        <input type="file" accept="audio/*" id="batch-audios-file" multiple>
+      </div>
+      <div class="batch-file-list" id="batch-audios-list"></div>
+    </div>
+    </div>
+    <div class="section-block">
+    <div class="sec-title">Metadata</div>
+    <div class="field-group">
+      <label>Durée de la vidéo</label>
+      <div class="range-row">
+        <input type="range" id="batch-dur-range" min="5" max="30" step="1" value="15">
+        <span class="range-val" id="batch-dur-val">15s</span>
+      </div>
+    </div>
+    </div>
+    <div class="notice">📦 Max 10 vidéos par session</div>
+  </aside>
+  <main class="main">
+    <div class="btn-row">
+      <button class="btn" id="batch-reroll-btn" onclick="batchRerollBackgrounds()">🎲 Nouveaux backgrounds</button>
+      <button class="btn primary" id="batch-generate-btn" onclick="batchGenerateAll()" disabled>Générer tout</button>
+    </div>
+    <div id="batch-pairs-list" class="batch-pairs"></div>
+    <p class="status" id="batch-status"></p>
   </main>
 </div>
 </div>
@@ -761,7 +836,206 @@ function switchTab(name,btn){
   btn.classList.add('active');
   if(name==='podcast')drawPodcastFrame();
   else refreshPreview();
+  if(name==='batch'){
+    document.getElementById('batch-dur-range').value=state.dur;
+    document.getElementById('batch-dur-val').textContent=state.dur+'s';
+  }
 }
+
+// ── BATCH ─────────────────────────────────────
+let batchCovers=[],batchAudios=[],batchPairs=[],batchBgByBase={};
+function batchBaseName(f){return f.name.replace(/\.[^.]+$/,'');}
+function renderBatchFileList(files,elId){
+  document.getElementById(elId).innerHTML=files.map(f=>`<div>${f.name}</div>`).join('');
+}
+async function batchFetchRandomBg(){
+  const res=await fetch(`${BASE_URL}/backgrounds/random`);
+  const data=await res.json();
+  return data.filename;
+}
+async function batchAssignBackgrounds(pairsToAssign){
+  await Promise.all(pairsToAssign.map(async p=>{
+    try{const filename=await batchFetchRandomBg();p.bg=filename;batchBgByBase[p.base]=filename;}catch(e){}
+  }));
+  batchRenderPairs();
+}
+function batchRerollBackgrounds(){
+  const validPairs=batchPairs.filter(p=>p.ok);
+  if(validPairs.length)batchAssignBackgrounds(validPairs);
+}
+async function batchRerollOnePair(idx){
+  const p=batchPairs[idx];
+  if(!p||!p.ok)return;
+  try{
+    const res=await fetch(`${BASE_URL}/backgrounds/random?mode=black`);
+    const data=await res.json();
+    p.bg=data.filename;
+    batchBgByBase[p.base]=data.filename;
+    batchRenderPairs();
+  }catch(e){}
+}
+function batchRebuildPairs(){
+  const coverByBase={};batchCovers.forEach(f=>coverByBase[batchBaseName(f)]=f);
+  const audioByBase={};batchAudios.forEach(f=>audioByBase[batchBaseName(f)]=f);
+  const bases=Array.from(new Set([...Object.keys(coverByBase),...Object.keys(audioByBase)]));
+  batchPairs=bases.map(base=>{
+    const cover=coverByBase[base],audio=audioByBase[base];
+    const parts=base.split(' - ');
+    const artist=parts[0]?.trim()||base,title=parts[1]?.trim()||'',label=parts[2]?.trim();
+    return {base,cover,audio,artist,title,label,bg:batchBgByBase[base]||null,ok:!!(cover&&audio)};
+  });
+  updateBatchGenerateBtn();
+  const needBg=batchPairs.filter(p=>p.ok&&!p.bg);
+  if(needBg.length)batchAssignBackgrounds(needBg);
+  else batchRenderPairs();
+}
+function batchRenderPairs(){
+  const list=document.getElementById('batch-pairs-list');
+  if(!batchPairs.length){list.innerHTML='';return;}
+  list.innerHTML=batchPairs.map((p,idx)=>{
+    const thumb=p.cover?`<img src="${URL.createObjectURL(p.cover)}">`:'<div class="batch-thumb-empty"></div>';
+    if(!p.ok){
+      const missing=p.cover?'⚠ Pas de correspondance audio':'⚠ Pas de correspondance cover';
+      return `<div class="batch-row warn">${thumb}<span>${p.base}</span><span class="bg-tag">${missing}</span></div>`;
+    }
+    const bgThumb=p.bg?`<img class="bg-thumb" src="${BASE_URL}/backgrounds/${p.bg}" title="${p.bg}" onclick="batchRerollOnePair(${idx})">`:'<div class="batch-thumb-empty"></div>';
+    const bgTag=p.bg?`🎲 ${p.bg} ✓`:'…';
+    const nameParts=[p.artist,p.title,p.label].filter(Boolean);
+    const genStatus=p.status==='done'?'<span class="gen-status done">✓ Généré</span>'
+      :p.status==='failed'?'<span class="gen-status failed">✗ Échec — serveur occupé</span>':'';
+    return `<div class="batch-row${p.status==='failed'?' failed':''}">${thumb}${bgThumb}<span>${nameParts.join(' — ')}</span><span class="bg-tag">${bgTag}</span>${genStatus}</div>`;
+  }).join('');
+}
+function updateBatchGenerateBtn(){
+  const hasValid=batchPairs.some(p=>p.ok);
+  const hasError=batchPairs.some(p=>!p.ok);
+  document.getElementById('batch-generate-btn').disabled=!(hasValid&&!hasError);
+}
+function batchGenerateAll(){startBatchExport();}
+function loadImageFromFile(file){
+  return new Promise(res=>loadImg(file,res));
+}
+function loadImageFromUrl(url){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.crossOrigin='anonymous';
+    img.onload=()=>resolve(img);
+    img.onerror=reject;
+    img.src=url;
+  });
+}
+function batchDateStamp(){
+  const d=new Date(),pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
+}
+async function batchExportOnePair(p,idx,total){
+  const label=[p.artist,p.title,p.label].filter(Boolean).join(' - ');
+  setStep(`Vidéo ${idx+1}/${total} — ${label}…`,(idx/total)*100);
+  const [coverImgLoaded,bgImgLoaded]=await Promise.all([
+    loadImageFromFile(p.cover),
+    loadImageFromUrl(`${BASE_URL}/backgrounds/${p.bg}`)
+  ]);
+  bgImg=bgImgLoaded;coverImg=coverImgLoaded;
+  if(!bgImg.complete)await new Promise(res=>{bgImg.onload=res;});
+  state.artist=p.artist;state.title=p.title;state.label=p.label||'';
+  const dur=state.dur,fps=24,totalFrames=dur*fps;
+  const exportCv=document.createElement('canvas');
+  exportCv.width=1080;exportCv.height=1350;
+  const exportCtx=exportCv.getContext('2d');
+  const formData=new FormData();
+  const savedNegative=isNegative;
+  isNegative=false;
+  for(let i=0;i<totalFrames;i++){
+    drawFrame(i/fps,dur,exportCtx);
+    let blob=await new Promise(res=>exportCv.toBlob(res,'image/jpeg',0.78));
+    const fname=`f${String(i).padStart(5,'0')}.jpg`;
+    formData.append(fname,blob,fname);
+    blob=null;
+    await new Promise(r=>setTimeout(r,0));
+  }
+  isNegative=savedNegative;
+  if(p.audio){
+    audioCtx=audioCtx||new AudioContext();
+    const buf=await audioCtx.decodeAudioData(await p.audio.arrayBuffer());
+    const ld=Math.min(dur,buf.duration);
+    const sr=buf.sampleRate,ns=Math.ceil(ld*sr);
+    const offCtx=new OfflineAudioContext(2,ns,sr);
+    const src=offCtx.createBufferSource();src.buffer=buf;src.connect(offCtx.destination);src.start(0,0);
+    const rendered=await offCtx.startRendering();
+    formData.append('audio',audioBufferToWav(rendered),'audio.wav');
+  }
+  formData.append('fps',String(fps));formData.append('filename',label);
+  const basePct=(idx/total)*100,share=100/total;
+  const mp4Blob=await new Promise((resolve,reject)=>{
+    const xhr=new XMLHttpRequest();
+    xhr.open('POST',`${BASE_URL}/export`);xhr.responseType='blob';
+    xhr.upload.onprogress=e=>{
+      if(e.lengthComputable)setStep(`Vidéo ${idx+1}/${total} — ${label}…`,basePct+(e.loaded/e.total)*share);
+    };
+    xhr.onload=()=>{
+      if(xhr.status===200)resolve(xhr.response);
+      else reject(new Error(`status_${xhr.status}`));
+    };
+    xhr.onerror=()=>reject(new Error('network'));
+    xhr.send(formData);
+  });
+  return {label,blob:mp4Blob};
+}
+async function startBatchExport(){
+  const validPairs=batchPairs.filter(p=>p.ok).slice(0,10);
+  if(!validPairs.length)return;
+  const genBtn=document.getElementById('batch-generate-btn');
+  genBtn.disabled=true;
+  exportStartTime=Date.now();
+  setStatus('Démarrage du batch…');
+  elRecProg.style.width='0%';
+  const zip=new JSZip();
+  const savedBgImg=bgImg,savedCoverImg=coverImg,savedArtist=state.artist,savedTitle=state.title,savedLabel=state.label;
+  let done=0,failed=0;
+  for(let idx=0;idx<validPairs.length;idx++){
+    const p=validPairs[idx];
+    try{
+      const {label,blob}=await batchExportOnePair(p,idx,validPairs.length);
+      zip.file(`${label}.mp4`,blob);
+      p.status='done';done++;
+    }catch(e){
+      p.status='failed';failed++;
+    }
+    batchRenderPairs();
+    elRecProg.style.width=(((idx+1)/validPairs.length)*100)+'%';
+  }
+  bgImg=savedBgImg;coverImg=savedCoverImg;state.artist=savedArtist;state.title=savedTitle;state.label=savedLabel;
+  refreshPreview();
+  if(done>0){
+    setStatus('Génération du ZIP…');
+    const content=await zip.generateAsync({type:'blob'});
+    const url=URL.createObjectURL(content);
+    const a=document.createElement('a');a.href=url;a.download=`sss-batch-${batchDateStamp()}.zip`;a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  }
+  if(failed>0)setStatus(`✓ ${done}/${validPairs.length} vidéos générées — ${failed} échec${failed>1?'s':''}`,done>0?'success':'error');
+  else setStatus(`✓ Batch terminé — ${done} vidéos générées`,'success');
+  setTimeout(()=>{elRecProg.style.width='0%';},3000);
+  updateBatchGenerateBtn();
+}
+document.getElementById('batch-covers-file').onchange=e=>{
+  batchCovers=Array.from(e.target.files);
+  document.getElementById('batch-covers-name').textContent=batchCovers.length?`${batchCovers.length} cover(s)`:'Choisir des images';
+  renderBatchFileList(batchCovers,'batch-covers-list');
+  batchRebuildPairs();
+};
+document.getElementById('batch-audios-file').onchange=e=>{
+  batchAudios=Array.from(e.target.files);
+  document.getElementById('batch-audios-name').textContent=batchAudios.length?`${batchAudios.length} fichier(s)`:'Choisir des fichiers';
+  renderBatchFileList(batchAudios,'batch-audios-list');
+  batchRebuildPairs();
+};
+document.getElementById('batch-dur-range').oninput=e=>{
+  document.getElementById('batch-dur-val').textContent=e.target.value+'s';
+  state.dur=+e.target.value;
+  const videoDurEl=document.getElementById('dur-range');
+  if(videoDurEl){videoDurEl.value=e.target.value;document.getElementById('dur-val').textContent=e.target.value+'s';}
+};
 
 document.getElementById('p-bg-file').onchange=e=>{
   if(!e.target.files[0])return;

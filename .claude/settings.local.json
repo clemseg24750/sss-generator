@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(awk '/<!-- ═══════════════ TAB BATCH/,/<script>/' /Users/csegura/Documents/Code_projects/sss-generator/index.html)"
+    ]
+  }
+}
