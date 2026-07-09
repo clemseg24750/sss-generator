@@ -67,8 +67,17 @@ canvas{display:block;width:100%;height:100%}
 .tab.active{border-bottom-color:var(--text);color:var(--text)}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
-.progress-bar{height:2px;background:var(--border);border-radius:0;overflow:hidden;margin-top:6px;width:100%;max-width:440px}
-.progress-fill{height:100%;width:0%;background:#fff;border-radius:0;transition:.1s}
+.batch-main-preview-cv{width:216px;height:270px;display:block;background:#000;margin:0 auto 16px}
+.seg-progress-bar{display:none;width:100%;max-width:440px;margin-top:6px}
+.seg-track{display:flex;height:2px;background:var(--border);overflow:hidden}
+.seg{flex:1;position:relative;background:var(--border)}
+.seg-fill{height:100%;width:0%;background:#fff;transition:.1s}
+.seg-sep{width:1px;flex-shrink:0;background:rgba(255,255,255,0.1)}
+.seg-labels{display:flex;margin-top:4px}
+.seg-label{flex:1;text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:.08em;text-transform:uppercase;opacity:.3}
+.seg-label.active{opacity:.8}
+@keyframes pulse-seg{0%,100%{opacity:.6}50%{opacity:1}}
+.seg-encoding.active{animation:pulse-seg 1.5s ease-in-out infinite}
 .tab-sep{color:var(--muted);margin:0 16px;user-select:none}
 .batch-file-list{font-family:var(--mono);font-size:11px;color:var(--muted);line-height:1.8;max-height:90px;overflow-y:auto}
 .batch-clear-btn{font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0}
@@ -302,13 +311,27 @@ canvas{display:block;width:100%;height:100%}
     <div class="notice">📦 Max 10 vidéos par session</div>
   </aside>
   <main class="main">
+    <canvas id="batch-main-preview-cv" class="batch-main-preview-cv" width="432" height="540"></canvas>
     <div class="btn-row">
       <button class="btn" id="batch-reroll-btn" onclick="batchRerollBackgrounds()">🎲 Nouveaux backgrounds</button>
       <button class="btn primary" id="batch-generate-btn" onclick="batchGenerateAll()" disabled>Générer mp4</button>
     </div>
     <div id="batch-pairs-list" class="batch-pairs"></div>
-    <div class="progress-bar"><div class="progress-fill" id="rec-prog"></div></div>
-    <p class="status" id="status"></p>
+    <div class="seg-progress-bar">
+      <div class="seg-track">
+        <div class="seg seg-frames" id="seg-frames"><div class="seg-fill" id="seg-frames-fill"></div></div>
+        <div class="seg-sep"></div>
+        <div class="seg seg-upload" id="seg-upload"><div class="seg-fill" id="seg-upload-fill"></div></div>
+        <div class="seg-sep"></div>
+        <div class="seg seg-encoding" id="seg-encoding"><div class="seg-fill" id="seg-encoding-fill"></div></div>
+      </div>
+      <div class="seg-labels">
+        <span class="seg-label" id="seg-label-frames">Rendu</span>
+        <span class="seg-label" id="seg-label-upload">Upload</span>
+        <span class="seg-label" id="seg-label-encoding">Encodage</span>
+      </div>
+    </div>
+    <p class="status" id="status" style="display:none"></p>
     <span id="eta" style="display:none;font-size:11px;opacity:0.4;font-family:var(--mono)"></span>
   </main>
   <aside class="batch-edit-panel" id="batch-edit-panel" style="display:none">
@@ -379,7 +402,6 @@ const W=1080,H=1350;
 let bgImg=null,coverImg=null,audioCtx=null;
 
 const elStatus=document.getElementById('status');
-const elRecProg=document.getElementById('rec-prog');
 const elEta=document.getElementById('eta');
 
 const BASE_URL=['localhost','127.0.0.1',''].includes(window.location.hostname)?'http://localhost:3000':'https://sss-generator.onrender.com';
@@ -392,18 +414,35 @@ AGLightEx.load().then(f=>{document.fonts.add(f);drawPodcastFrame();});
 
 function shortName(s,n=24){return s.length>n?s.slice(0,n-1)+'…':s;}
 function loadImg(file,cb){const r=new FileReader();r.onload=e=>{const i=new Image();i.onload=()=>cb(i);i.src=e.target.result;};r.readAsDataURL(file);}
-function setStatus(msg,type=''){elStatus.textContent=msg;elStatus.className='status'+(type?' '+type:'');if(type==='success'||type==='error')elEta.style.display='none';}
-function setStep(step,pct){
-  elStatus.textContent=step;elStatus.className='status';elRecProg.style.width=pct+'%';
-  if(pct>5&&pct<95){
-    const elapsed=(Date.now()-exportStartTime)/1000;
-    const estimated=elapsed/(pct/100);
-    const remaining=Math.round(estimated-elapsed);
-    elEta.textContent='~'+remaining+'s restantes';
-    elEta.style.display='block';
-  }else{
-    elEta.style.display='none';
+function setStatus(msg,type=''){elStatus.textContent=msg;elStatus.className='status'+(type?' '+type:'');}
+function setStep(phase,pct){
+  const fill=document.getElementById(`seg-${phase}-fill`);
+  if(fill)fill.style.width=Math.max(0,Math.min(100,pct))+'%';
+  document.querySelectorAll('.seg-label').forEach(l=>l.classList.toggle('active',l.id===`seg-label-${phase}`));
+}
+function resetSegments(){
+  ['frames','upload','encoding'].forEach(phase=>{
+    const fill=document.getElementById(`seg-${phase}-fill`);
+    if(fill)fill.style.width='0%';
+    const lbl=document.getElementById(`seg-label-${phase}`);
+    if(lbl)lbl.classList.remove('active');
+    const seg=document.getElementById(`seg-${phase}`);
+    if(seg)seg.classList.remove('active');
+  });
+}
+function getTimeEstimate(dur,hasAudio){
+  const times=JSON.parse(localStorage.getItem('sss-export-times')||'[]');
+  if(times.length){
+    const avg=times.reduce((a,b)=>a+b,0)/times.length;
+    const mins=Math.round(avg/60);
+    return `~${mins} min par vidéo (basé sur vos exports précédents)`;
   }
+  return '~2-4 min par vidéo';
+}
+function recordExportTime(elapsedSeconds){
+  const times=JSON.parse(localStorage.getItem('sss-export-times')||'[]');
+  times.unshift(elapsedSeconds);
+  localStorage.setItem('sss-export-times',JSON.stringify(times.slice(0,3)));
 }
 function fillTextStretched(c,text,x,y){
   c.save();
@@ -698,7 +737,7 @@ function batchRebuildPairs(){
 }
 function batchRenderPairs(){
   const list=document.getElementById('batch-pairs-list');
-  if(!batchPairs.length){list.innerHTML='';return;}
+  if(!batchPairs.length){list.innerHTML='';renderBatchMainPreview();return;}
   list.innerHTML=batchPairs.map((p,idx)=>{
     if(!p.ok){
       const thumb=p.cover?`<img src="${URL.createObjectURL(p.cover)}">`:'<div class="batch-thumb-empty"></div>';
@@ -734,6 +773,7 @@ function batchRenderPairs(){
     const rows=document.querySelectorAll('#batch-pairs-list .batch-row');
     if(rows[activePairIndex])rows[activePairIndex].classList.add('active');
   }
+  renderBatchMainPreview();
 }
 async function batchGetPairImages(p){
   if(!p._coverImgEl)p._coverImgEl=await loadImageFromFile(p.cover);
@@ -768,7 +808,44 @@ function batchDrawEditPreview(){
   if(!p||!p._coverImgEl||!p._bgImgEl)return;
   const cv=document.getElementById('batch-edit-cv');
   batchRenderPairFrame(p,cv.getContext('2d'));
+  renderBatchMainPreview();
 }
+function drawBatchPlaceholder(ctx){
+  const cw=ctx.canvas.width,ch=ctx.canvas.height;
+  const sc=cw/W;
+  ctx.clearRect(0,0,cw,ch);
+  ctx.fillStyle='#000';ctx.fillRect(0,0,cw,ch);
+  const cs=640*sc,cx=(cw-cs)/2,cy=200*sc;
+  ctx.fillStyle='rgba(255,255,255,0.03)';ctx.fillRect(cx,cy,cs,cs);
+  ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=1;ctx.strokeRect(cx,cy,cs,cs);
+  ctx.fillStyle='rgba(255,255,255,0.15)';ctx.font=`${14*sc}px DM Mono,monospace`;
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText('COVER',cw/2,cy+cs/2);
+  ctx.textBaseline='alphabetic';
+  ctx.fillStyle='rgba(255,255,255,0.08)';
+  ctx.font=`${72*sc}px EuropaGroteskSH-Med,sans-serif`;ctx.fillText('ARTISTE',cw/2,cy+cs+110*sc);
+  ctx.font=`${46*sc}px EuropaGroteskSH-Med,sans-serif`;ctx.fillText('TITRE',cw/2,cy+cs+175*sc);
+  ctx.font=`${26*sc}px EuropaGroteskSH-Med,sans-serif`;ctx.fillText('LABEL',cw/2,cy+cs+230*sc);
+  const barW=320*sc,barH=3*sc,barX=(cw-barW)/2,barY=cy+cs+290*sc;
+  ctx.fillStyle='rgba(255,255,255,0.06)';ctx.fillRect(barX,barY,barW,barH);
+}
+function renderBatchMainPreview(){
+  const cv=document.getElementById('batch-main-preview-cv');
+  if(!cv)return;
+  const hasAssets=batchCovers.length>0||batchAudios.length>0;
+  cv.style.display=hasAssets?'none':'block';
+  if(hasAssets)return;
+  const ctx=cv.getContext('2d');
+  if(activePairIndex!=null){
+    const p=batchPairs[activePairIndex];
+    if(p&&p.ok&&p.cover&&p._coverImgEl&&p._bgImgEl){
+      batchRenderPairFrame(p,ctx);
+      return;
+    }
+  }
+  drawBatchPlaceholder(ctx);
+}
+renderBatchMainPreview();
 function batchSelectPair(idx){
   const p=batchPairs[idx];
   if(!p||!p.ok)return;
@@ -817,6 +894,7 @@ function batchCloseEditPanel(){
   document.querySelectorAll('#batch-pairs-list .batch-row').forEach(r=>r.classList.remove('active'));
   document.getElementById('batch-edit-panel').style.display='none';
   document.getElementById('batch-app').classList.remove('edit-open');
+  renderBatchMainPreview();
 }
 async function batchEditRerollBg(){
   if(activePairIndex==null)return;
@@ -998,7 +1076,9 @@ function batchDateStamp(){
 }
 async function batchExportOnePair(p,idx,total){
   const label=[p.artist,p.title,p.label].filter(Boolean).join(' - ');
-  setStep(`Vidéo ${idx+1}/${total} — ${label}…`,(idx/total)*100);
+  setStatus(`Vidéo ${idx+1}/${total} — ${label}…`);
+  resetSegments();
+  setStep('frames',0);
   const [coverImgLoaded,bgImgLoaded]=await Promise.all([
     loadImageFromFile(p.cover),
     loadImageFromUrl(`${BASE_URL}/backgrounds/${p.bg}`)
@@ -1019,6 +1099,7 @@ async function batchExportOnePair(p,idx,total){
     const fname=`f${String(i).padStart(5,'0')}.jpg`;
     formData.append(fname,blob,fname);
     blob=null;
+    setStep('frames',(i+1)/totalFrames*100);
     await new Promise(r=>setTimeout(r,0));
   }
   isNegative=savedNegative;
@@ -1033,18 +1114,26 @@ async function batchExportOnePair(p,idx,total){
     formData.append('audio',audioBufferToWav(rendered),'audio.wav');
   }
   formData.append('fps',String(fps));formData.append('filename',label);
-  const basePct=(idx/total)*100,share=100/total;
+  setStep('upload',0);
   const mp4Blob=await new Promise((resolve,reject)=>{
     const xhr=new XMLHttpRequest();
     xhr.open('POST',`${BASE_URL}/export`);xhr.responseType='blob';
     xhr.upload.onprogress=e=>{
-      if(e.lengthComputable)setStep(`Vidéo ${idx+1}/${total} — ${label}…`,basePct+(e.loaded/e.total)*share);
+      if(e.lengthComputable)setStep('upload',(e.loaded/e.total)*100);
+    };
+    xhr.upload.onload=()=>{
+      setStep('encoding',0);
+      document.getElementById('seg-encoding').classList.add('active');
     };
     xhr.onload=()=>{
-      if(xhr.status===200)resolve(xhr.response);
+      document.getElementById('seg-encoding').classList.remove('active');
+      if(xhr.status===200){setStep('encoding',100);resolve(xhr.response);}
       else reject(new Error(`status_${xhr.status}`));
     };
-    xhr.onerror=()=>reject(new Error('network'));
+    xhr.onerror=()=>{
+      document.getElementById('seg-encoding').classList.remove('active');
+      reject(new Error('network'));
+    };
     xhr.send(formData);
   });
   return {label,blob:mp4Blob};
@@ -1055,22 +1144,27 @@ async function startBatchExport(){
   const genBtn=document.getElementById('batch-generate-btn');
   genBtn.disabled=true;
   exportStartTime=Date.now();
+  elStatus.style.display='block';
+  document.querySelector('.seg-progress-bar').style.display='block';
   setStatus('Démarrage du batch…');
-  elRecProg.style.width='0%';
+  resetSegments();
+  elEta.textContent=getTimeEstimate(state.dur,validPairs.some(p=>p.audio));
+  elEta.style.display='block';
   const zip=new JSZip();
   const savedBgImg=bgImg,savedCoverImg=coverImg,savedArtist=state.artist,savedTitle=state.title,savedLabel=state.label;
   let done=0,failed=0;
   for(let idx=0;idx<validPairs.length;idx++){
     const p=validPairs[idx];
+    const pairStart=Date.now();
     try{
       const {label,blob}=await batchExportOnePair(p,idx,validPairs.length);
       zip.file(`${label}.mp4`,blob);
       p.status='done';done++;
+      recordExportTime((Date.now()-pairStart)/1000);
     }catch(e){
       p.status='failed';failed++;
     }
     batchRenderPairs();
-    elRecProg.style.width=(((idx+1)/validPairs.length)*100)+'%';
   }
   bgImg=savedBgImg;coverImg=savedCoverImg;state.artist=savedArtist;state.title=savedTitle;state.label=savedLabel;
   if(done>0){
@@ -1082,7 +1176,7 @@ async function startBatchExport(){
   }
   if(failed>0)setStatus(`✓ ${done}/${validPairs.length} vidéos générées — ${failed} échec${failed>1?'s':''}`,done>0?'success':'error');
   else setStatus(`✓ Batch terminé — ${done} vidéos générées`,'success');
-  setTimeout(()=>{elRecProg.style.width='0%';},3000);
+  setTimeout(()=>{resetSegments();},3000);
   updateBatchGenerateBtn();
 }
 function batchAddFiles(newFiles,existing){
