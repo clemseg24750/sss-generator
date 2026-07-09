@@ -810,7 +810,7 @@ function batchSetEditBgMode(mode){
   p.textColor=mode==='black'?'255,255,255':'0,0,0';
   batchTextColorByBase[p.base]=p.textColor;
   batchUpdateEditModeToggle(p);
-  batchDrawPairPreview(activePairIndex);
+  batchEditRerollBg();
 }
 function batchCloseEditPanel(){
   activePairIndex=null;
