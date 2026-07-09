@@ -13,6 +13,14 @@ const app = express();
 const BACKGROUNDS_DIR = path.join(__dirname, 'public', 'backgrounds');
 
 let isProcessing = false;
+let _bgCache = null;
+function getBackgroundFiles() {
+  if (!_bgCache) {
+    _bgCache = fs.readdirSync(BACKGROUNDS_DIR)
+      .filter(f => f.toLowerCase().endsWith('.jpg'));
+  }
+  return _bgCache;
+}
 
 // ── CORS ──────────────────────────────────────────────────────────
 app.use((req, res, next) => {
@@ -23,14 +31,17 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.static(__dirname));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use('/backgrounds', express.static(BACKGROUNDS_DIR));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, req.tmpDir),
-  filename: (req, file, cb) => cb(null, file.originalname)
+  filename: (req, file, cb) => {
+    const safe = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 100);
+    cb(null, safe);
+  }
 });
-const upload = multer({ storage });
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024, files: 600 } });
 
 function makeTmpDir(req, res, next) {
   req.tmpDir = path.join(os.tmpdir(), `sss-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -44,6 +55,12 @@ function checkProcessing(req, res, next) {
   }
   isProcessing = true;
   next();
+}
+
+function handleUploadError(err, req, res, next) {
+  isProcessing = false;
+  if (req.tmpDir) fs.rm(req.tmpDir, { recursive: true, force: true }, () => {});
+  res.status(500).json({ error: 'Erreur upload : ' + err.message });
 }
 
 const exportLimiter = rateLimit({
@@ -67,22 +84,30 @@ async function runExport(req, res) {
       ...(hasAudio ? ['-i', 'audio.wav', '-shortest'] : []),
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
-      '-crf', '26',
+      '-crf', '28',
       '-pix_fmt', 'yuv420p',
       ...(hasAudio ? ['-c:a', 'aac', '-b:a', '192k'] : []),
       '-movflags', '+faststart',
       'out.mp4'
     ];
 
-    await execFileAsync('ffmpeg', args, { cwd: tmpDir });
+    await execFileAsync('ffmpeg', args, { cwd: tmpDir, timeout: 5 * 60 * 1000, maxBuffer: 10 * 1024 * 1024 });
 
-    res.download(path.join(tmpDir, 'out.mp4'), `${filename}.mp4`, () => {
-      fs.rm(tmpDir, { recursive: true, force: true }, () => {});
+    res.download(path.join(tmpDir, 'out.mp4'), `${filename}.mp4`, (err) => {
+      if (err) console.error('[download error]', err.message);
+      fs.rm(tmpDir, { recursive: true, force: true }, (err) => {
+        if (err) console.error('[cleanup error]', err.message);
+      });
     });
   } catch (err) {
-    fs.rm(tmpDir, { recursive: true, force: true }, () => {});
+    console.error('[export error]', err.message);
+    fs.rm(tmpDir, { recursive: true, force: true }, (err) => {
+      if (err) console.error('[cleanup error]', err.message);
+    });
     if (!res.headersSent) {
-      const msg = err.code === 'ENOENT'
+      const msg = err.killed
+        ? 'Encodage annulé — délai dépassé.'
+        : err.code === 'ENOENT'
         ? 'FFmpeg introuvable — installez-le et vérifiez le PATH.'
         : (err.stderr || err.message);
       res.status(500).json({ error: msg });
@@ -100,20 +125,31 @@ app.get('/status', (req, res) => {
 });
 
 app.get('/backgrounds/random', (req, res) => {
-  const files = fs.readdirSync(BACKGROUNDS_DIR).filter(f => f.endsWith('.jpg'));
-  const filtered = req.query.mode
-    ? files.filter(f => f.startsWith(req.query.mode + '_'))
-    : files;
-  const filename = filtered[Math.floor(Math.random() * filtered.length)];
-  res.json({ filename, url: `/backgrounds/${filename}` });
+  try {
+    const files = getBackgroundFiles();
+    if (!files.length) return res.status(404).json({ error: 'Aucun background disponible.' });
+    const filtered = req.query.mode
+      ? files.filter(f => f.startsWith(req.query.mode + '_'))
+      : files;
+    if (!filtered.length) return res.status(404).json({ error: 'Aucun background disponible.' });
+    const filename = filtered[Math.floor(Math.random() * filtered.length)];
+    res.json({ filename, url: `/backgrounds/${filename}` });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erreur lecture backgrounds.' });
+  }
 });
 
 app.get('/backgrounds/list', (req, res) => {
-  const backgrounds = fs.readdirSync(BACKGROUNDS_DIR).filter(f => f.toLowerCase().endsWith('.jpg'));
-  res.json({ backgrounds, total: backgrounds.length });
+  try {
+    const backgrounds = getBackgroundFiles();
+    if (!backgrounds.length) return res.status(404).json({ error: 'Aucun background disponible.' });
+    res.json({ backgrounds, total: backgrounds.length });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erreur lecture backgrounds.' });
+  }
 });
 
-app.post('/export', exportLimiter, checkProcessing, makeTmpDir, upload.any(), runExport);
+app.post('/export', exportLimiter, checkProcessing, makeTmpDir, upload.any(), handleUploadError, runExport);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`SSS Generator → http://localhost:${PORT}`));

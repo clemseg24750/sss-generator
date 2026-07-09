@@ -1006,7 +1006,7 @@ async function batchExportOnePair(p,idx,total){
   bgImg=bgImgLoaded;coverImg=coverImgLoaded;
   if(!bgImg.complete)await new Promise(res=>{bgImg.onload=res;});
   state.artist=p.artist;state.title=p.title;state.label=p.label||'';
-  const dur=state.dur,fps=24,totalFrames=dur*fps;
+  const dur=state.dur,fps=20,totalFrames=dur*fps;
   const exportCv=document.createElement('canvas');
   exportCv.width=1080;exportCv.height=1350;
   const exportCtx=exportCv.getContext('2d');
@@ -1015,7 +1015,7 @@ async function batchExportOnePair(p,idx,total){
   isNegative=false;
   for(let i=0;i<totalFrames;i++){
     drawFrame(i/fps,dur,exportCtx,{textOpacity:p.textOpacity,bgZoom:p.bgZoom,bgPosX:p.bgPosX,bgPosY:p.bgPosY,textColor:p.textColor});
-    let blob=await new Promise(res=>exportCv.toBlob(res,'image/jpeg',0.78));
+    let blob=await new Promise(res=>exportCv.toBlob(res,'image/jpeg',0.75));
     const fname=`f${String(i).padStart(5,'0')}.jpg`;
     formData.append(fname,blob,fname);
     blob=null;
