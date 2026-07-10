@@ -738,10 +738,23 @@ async function startBoosterExport(){
   }
   const date=document.getElementById('booster-date').value||'';
   const filename='booster-'+date.replace(/\s+/g,'_');
+
+  const dateCanvas=document.createElement('canvas');
+  dateCanvas.width=1080;
+  dateCanvas.height=1350;
+  const dctx=dateCanvas.getContext('2d');
+  dctx.clearRect(0,0,1080,1350);
+  dctx.fillStyle='#000000';
+  dctx.font='bold 54px DM Sans, sans-serif';
+  dctx.textBaseline='top';
+  dctx.fillText(date.toUpperCase(),60,280);
+  const dateBlob=await new Promise(res=>dateCanvas.toBlob(res,'image/png'));
+
   const formData=new FormData();
   formData.append('bgFilename',boosterBgFilename);
   formData.append('date',date);
   formData.append('filename',filename);
+  formData.append('date_overlay.png',dateBlob,'date_overlay.png');
 
   elStatus.style.display='block';
   document.querySelector('.seg-progress-bar').style.display='block';

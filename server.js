@@ -129,32 +129,22 @@ async function runExport(req, res) {
   }
 }
 
-function escapeDrawtext(s) {
-  return String(s)
-    .replace(/\\/g, '\\\\')
-    .replace(/'/g, "\\'")
-    .replace(/:/g, '\\:')
-    .replace(/%/g, '\\%');
-}
-
 async function runBoosterExport(req, res) {
   const { tmpDir } = req;
   try {
     const bgFilename = (req.body.bgFilename || '').replace(/[^a-zA-Z0-9._-]/g, '');
-    const date = (req.body.date || '').slice(0, 60);
     const filename = (req.body.filename || 'booster').replace(/[^\w\-]/g, '_');
 
     if (!bgFilename) throw new Error('Background manquant.');
     const bgSrc = path.join(BOOSTER_BACKGROUNDS_DIR, bgFilename);
     if (!fs.existsSync(bgSrc)) throw new Error('Background introuvable.');
-    fs.copyFileSync(bgSrc, path.join(tmpDir, 'bg.jpg'));
-
-    const drawtext = `drawtext=text='${escapeDrawtext(date)}':fontsize=36:fontcolor=black:x=60:y=280:font=Sans:style=Bold`;
 
     const args = [
-      '-loop', '1', '-i', 'bg.jpg',
-      '-stream_loop', '-1', '-framerate', '4', '-i', path.join(BOOSTER_FRAMES_DIR, 'frame%04d.png'), '-t', '30',
-      '-filter_complex', `[0:v][1:v]overlay=0:0,scale=trunc(iw/2)*2:trunc(ih/2)*2,${drawtext}[out]`,
+      '-loop', '1', '-i', path.join(__dirname, 'public', 'booster', 'backgrounds', bgFilename),
+      '-stream_loop', '-1', '-framerate', '4', '-i', path.join(BOOSTER_FRAMES_DIR, 'frame%04d.png'),
+      '-i', path.join(tmpDir, 'date_overlay.png'),
+      '-filter_complex',
+      '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[bg];[bg][1:v]overlay=0:0[bgframes];[bgframes][2:v]overlay=0:0[out]',
       '-map', '[out]',
       '-c:v', 'libx264',
       '-preset', 'ultrafast',
