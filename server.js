@@ -141,7 +141,7 @@ async function runBoosterExport(req, res) {
 
     const args = [
       '-loop', '1', '-i', path.join(__dirname, 'public', 'booster', 'backgrounds', bgFilename),
-      '-stream_loop', '-1', '-framerate', '4', '-i', path.join(BOOSTER_FRAMES_DIR, 'frame%04d.png'),
+      '-stream_loop', '-1', '-framerate', '30', '-i', path.join(BOOSTER_FRAMES_DIR, 'frame%04d.png'),
       '-i', path.join(tmpDir, 'date_overlay.png'),
       '-filter_complex',
       '[0:v]scale=trunc(iw/2)*2:trunc(ih/2)*2[bg];[bg][1:v]overlay=0:0[bgframes];[bgframes][2:v]overlay=0:0[out]',

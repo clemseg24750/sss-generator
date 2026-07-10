@@ -75,6 +75,8 @@ canvas{display:block;width:100%;height:100%}
 .subtab-panel.active{display:block}
 .video-status-row{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 24px 0}
 .batch-main-preview-cv{width:216px;height:270px;display:block;background:#000;margin:0 auto 16px}
+.booster-step{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.08em;padding:4px 0;transition:.1s}
+.booster-step.pulse{animation:pulse-seg 1.5s ease-in-out infinite}
 .seg-progress-bar{display:none;width:100%;max-width:440px;margin-top:6px}
 .seg-track{display:flex;height:2px;background:var(--border);overflow:hidden}
 .seg{flex:1;position:relative;background:var(--border)}
@@ -384,6 +386,13 @@ canvas{display:block;width:100%;height:100%}
   </aside>
   <main class="main">
     <canvas id="booster-preview-cv" class="batch-main-preview-cv" width="432" height="540" style="display:block"></canvas>
+    <div id="booster-steps" style="display:none">
+      <div class="booster-step" id="bstep-bg">⬜ Chargement du background…</div>
+      <div class="booster-step" id="bstep-date">⬜ Génération de la date…</div>
+      <div class="booster-step" id="bstep-upload">⬜ Envoi vers le serveur…</div>
+      <div class="booster-step" id="bstep-encode">⬜ Encodage vidéo…</div>
+      <div class="booster-step" id="bstep-done">⬜ Téléchargement…</div>
+    </div>
     <button class="btn primary" style="width:216px;justify-content:center" onclick="boosterGenerate()">⬇ Générer MP4</button>
   </main>
 </div>
@@ -705,7 +714,7 @@ function drawBoosterFrame(){
     ctx.fillStyle='#000';
     ctx.font=`bold ${36*sc}px DM Sans,sans-serif`;
     ctx.textAlign='left';ctx.textBaseline='alphabetic';
-    ctx.fillText(dateText,60*sc,280*sc);
+    ctx.fillText(dateText,60*sc,200*sc);
   }
 }
 function boosterPickRandomBg(){
@@ -730,6 +739,15 @@ function boosterPickRandomBg(){
 function boosterGenerate(){
   startBoosterExport();
 }
+function boosterSetStep(stepId) {
+  const steps = ['bstep-bg','bstep-date','bstep-upload','bstep-encode','bstep-done'];
+  const idx = steps.indexOf(stepId);
+  steps.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (i < idx) { el.textContent = el.textContent.replace('▶','✓').replace('⬜','✓'); el.style.opacity='0.4'; el.style.color='var(--muted)'; }
+    else if (i === idx) { el.textContent = el.textContent.replace('⬜','▶').replace('✓','▶'); el.style.opacity='1'; el.style.color='var(--text)'; }
+  });
+}
 async function startBoosterExport(){
   if(!boosterBgFilename){
     elStatus.style.display='block';
@@ -739,6 +757,9 @@ async function startBoosterExport(){
   const date=document.getElementById('booster-date').value||'';
   const filename='booster-'+date.replace(/\s+/g,'_');
 
+  document.getElementById('booster-steps').style.display='block';
+  boosterSetStep('bstep-bg');
+
   const dateCanvas=document.createElement('canvas');
   dateCanvas.width=1080;
   dateCanvas.height=1350;
@@ -747,8 +768,9 @@ async function startBoosterExport(){
   dctx.fillStyle='#000000';
   dctx.font='bold 54px DM Sans, sans-serif';
   dctx.textBaseline='top';
-  dctx.fillText(date.toUpperCase(),60,280);
+  dctx.fillText(date.toUpperCase(),60,200);
   const dateBlob=await new Promise(res=>dateCanvas.toBlob(res,'image/png'));
+  boosterSetStep('bstep-date');
 
   const formData=new FormData();
   formData.append('bgFilename',boosterBgFilename);
@@ -763,6 +785,7 @@ async function startBoosterExport(){
   setStep('upload',0);
 
   try{
+    boosterSetStep('bstep-upload');
     const blob=await new Promise((resolve,reject)=>{
       const xhr=new XMLHttpRequest();
       xhr.open('POST',`${BASE_URL}/booster/export`);xhr.responseType='blob';
@@ -772,14 +795,18 @@ async function startBoosterExport(){
       xhr.upload.onload=()=>{
         setStep('encoding',0);
         document.getElementById('seg-encoding').classList.add('active');
+        boosterSetStep('bstep-encode');
+        document.getElementById('bstep-encode').classList.add('pulse');
       };
       xhr.onload=()=>{
         document.getElementById('seg-encoding').classList.remove('active');
-        if(xhr.status===200){setStep('encoding',100);resolve(xhr.response);}
+        document.getElementById('bstep-encode').classList.remove('pulse');
+        if(xhr.status===200){setStep('encoding',100);boosterSetStep('bstep-done');resolve(xhr.response);}
         else reject(new Error(`status_${xhr.status}`));
       };
       xhr.onerror=()=>{
         document.getElementById('seg-encoding').classList.remove('active');
+        document.getElementById('bstep-encode').classList.remove('pulse');
         reject(new Error('network'));
       };
       xhr.send(formData);
@@ -788,8 +815,10 @@ async function startBoosterExport(){
     const a=document.createElement('a');a.href=url;a.download=`${filename}.mp4`;a.click();
     setTimeout(()=>URL.revokeObjectURL(url),5000);
     setStatus('✓ Booster généré.','success');
+    setTimeout(()=>{document.getElementById('booster-steps').style.display='none';},3000);
   }catch(e){
     setStatus('Erreur : '+e.message,'error');
+    setTimeout(()=>{document.getElementById('booster-steps').style.display='none';},3000);
   }
 }
 document.getElementById('booster-date').oninput=e=>{
