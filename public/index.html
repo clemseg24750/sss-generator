@@ -77,6 +77,8 @@ canvas{display:block;width:100%;height:100%}
 .batch-main-preview-cv{width:216px;height:270px;display:block;background:#000;margin:0 auto 16px}
 .booster-step{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:.08em;padding:4px 0;transition:.1s}
 .booster-step.pulse{animation:pulse-seg 1.5s ease-in-out infinite}
+#booster-progress-bar{height:2px;background:var(--border);overflow:hidden;margin-top:6px;width:100%;max-width:440px}
+#booster-progress-fill{height:100%;width:0%;background:#fff;transition:.1s}
 .seg-progress-bar{display:none;width:100%;max-width:440px;margin-top:6px}
 .seg-track{display:flex;height:2px;background:var(--border);overflow:hidden}
 .seg{flex:1;position:relative;background:var(--border)}
@@ -393,6 +395,10 @@ canvas{display:block;width:100%;height:100%}
       <div class="booster-step" id="bstep-encode">⬜ Encodage vidéo…</div>
       <div class="booster-step" id="bstep-done">⬜ Téléchargement…</div>
     </div>
+    <div id="booster-progress-bar" style="display:none">
+      <div id="booster-progress-fill"></div>
+    </div>
+    <p id="booster-status" class="status"></p>
     <button class="btn primary" style="width:216px;justify-content:center" onclick="boosterGenerate()">⬇ Générer MP4</button>
   </main>
 </div>
@@ -749,9 +755,13 @@ function boosterSetStep(stepId) {
   });
 }
 async function startBoosterExport(){
+  const boosterStatus=document.getElementById('booster-status');
+  const boosterProgressBar=document.getElementById('booster-progress-bar');
+  const boosterProgressFill=document.getElementById('booster-progress-fill');
+
   if(!boosterBgFilename){
-    elStatus.style.display='block';
-    setStatus('Clique sur Background Aléatoire pour commencer.','error');
+    boosterStatus.textContent='Clique sur Background Aléatoire pour commencer.';
+    boosterStatus.className='status error';
     return;
   }
   const date=document.getElementById('booster-date').value||'';
@@ -778,11 +788,10 @@ async function startBoosterExport(){
   formData.append('filename',filename);
   formData.append('date_overlay.png',dateBlob,'date_overlay.png');
 
-  elStatus.style.display='block';
-  document.querySelector('.seg-progress-bar').style.display='block';
-  resetSegments();
-  setStatus('Génération du Booster…');
-  setStep('upload',0);
+  boosterProgressBar.style.display='block';
+  boosterProgressFill.style.width='0%';
+  boosterStatus.textContent='Génération du Booster…';
+  boosterStatus.className='status';
 
   try{
     boosterSetStep('bstep-upload');
@@ -790,22 +799,18 @@ async function startBoosterExport(){
       const xhr=new XMLHttpRequest();
       xhr.open('POST',`${BASE_URL}/booster/export`);xhr.responseType='blob';
       xhr.upload.onprogress=e=>{
-        if(e.lengthComputable)setStep('upload',(e.loaded/e.total)*100);
+        if(e.lengthComputable)boosterProgressFill.style.width=((e.loaded/e.total)*100)+'%';
       };
       xhr.upload.onload=()=>{
-        setStep('encoding',0);
-        document.getElementById('seg-encoding').classList.add('active');
         boosterSetStep('bstep-encode');
         document.getElementById('bstep-encode').classList.add('pulse');
       };
       xhr.onload=()=>{
-        document.getElementById('seg-encoding').classList.remove('active');
         document.getElementById('bstep-encode').classList.remove('pulse');
-        if(xhr.status===200){setStep('encoding',100);boosterSetStep('bstep-done');resolve(xhr.response);}
+        if(xhr.status===200){boosterProgressFill.style.width='100%';boosterSetStep('bstep-done');resolve(xhr.response);}
         else reject(new Error(`status_${xhr.status}`));
       };
       xhr.onerror=()=>{
-        document.getElementById('seg-encoding').classList.remove('active');
         document.getElementById('bstep-encode').classList.remove('pulse');
         reject(new Error('network'));
       };
@@ -814,11 +819,19 @@ async function startBoosterExport(){
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');a.href=url;a.download=`${filename}.mp4`;a.click();
     setTimeout(()=>URL.revokeObjectURL(url),5000);
-    setStatus('✓ Booster généré.','success');
-    setTimeout(()=>{document.getElementById('booster-steps').style.display='none';},3000);
+    boosterStatus.textContent='✓ Booster généré.';
+    boosterStatus.className='status success';
+    setTimeout(()=>{
+      document.getElementById('booster-steps').style.display='none';
+      boosterProgressBar.style.display='none';
+    },3000);
   }catch(e){
-    setStatus('Erreur : '+e.message,'error');
-    setTimeout(()=>{document.getElementById('booster-steps').style.display='none';},3000);
+    boosterStatus.textContent='Erreur : '+e.message;
+    boosterStatus.className='status error';
+    setTimeout(()=>{
+      document.getElementById('booster-steps').style.display='none';
+      boosterProgressBar.style.display='none';
+    },3000);
   }
 }
 document.getElementById('booster-date').oninput=e=>{
