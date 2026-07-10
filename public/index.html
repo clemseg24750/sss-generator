@@ -67,6 +67,13 @@ canvas{display:block;width:100%;height:100%}
 .tab.active{border-bottom-color:var(--text);color:var(--text)}
 .tab-panel{display:none}
 .tab-panel.active{display:block}
+.subtabs{display:flex;gap:18px;padding:10px 24px;border-bottom:1px solid var(--border)}
+.subtab{background:none;border:none;border-bottom:1px solid transparent;color:var(--muted);cursor:pointer;font-family:var(--sans);font-size:10px;text-transform:uppercase;letter-spacing:.15em;padding:4px 0;transition:.1s}
+.subtab:hover{color:var(--text)}
+.subtab.active{border-bottom-color:var(--text);color:var(--text)}
+.subtab-panel{display:none}
+.subtab-panel.active{display:block}
+.video-status-row{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 24px 0}
 .batch-main-preview-cv{width:216px;height:270px;display:block;background:#000;margin:0 auto 16px}
 .seg-progress-bar{display:none;width:100%;max-width:440px;margin-top:6px}
 .seg-track{display:flex;height:2px;background:var(--border);overflow:hidden}
@@ -266,6 +273,29 @@ canvas{display:block;width:100%;height:100%}
 
 <!-- ═══════════════ TAB BATCH ═══════════════ -->
 <div id="tab-video" class="tab-panel active">
+<nav class="subtabs">
+  <button class="subtab active" onclick="switchVideoSubTab('release',this)">Release</button>
+  <button class="subtab" onclick="switchVideoSubTab('booster',this)">Booster</button>
+</nav>
+<div class="video-status-row">
+  <div class="seg-progress-bar">
+    <div class="seg-track">
+      <div class="seg seg-frames" id="seg-frames"><div class="seg-fill" id="seg-frames-fill"></div></div>
+      <div class="seg-sep"></div>
+      <div class="seg seg-upload" id="seg-upload"><div class="seg-fill" id="seg-upload-fill"></div></div>
+      <div class="seg-sep"></div>
+      <div class="seg seg-encoding" id="seg-encoding"><div class="seg-fill" id="seg-encoding-fill"></div></div>
+    </div>
+    <div class="seg-labels">
+      <span class="seg-label" id="seg-label-frames">Rendu</span>
+      <span class="seg-label" id="seg-label-upload">Upload</span>
+      <span class="seg-label" id="seg-label-encoding">Encodage</span>
+    </div>
+  </div>
+  <p class="status" id="status" style="display:none"></p>
+  <span id="eta" style="display:none;font-size:11px;opacity:0.4;font-family:var(--mono)"></span>
+</div>
+<div id="subtab-release" class="subtab-panel active">
 <div class="app batch-app" id="batch-app">
   <aside class="sidebar">
     <div class="section-block">
@@ -292,20 +322,10 @@ canvas{display:block;width:100%;height:100%}
       </div>
       <div class="upload-zone">
         <div class="uz-icon">🎵</div>
-        <div><div class="uz-title" id="batch-audios-name">Choisir des fichiers</div><div class="uz-sub">MP3 WAV AAC</div></div>
-        <input type="file" accept="audio/*" id="batch-audios-file" multiple>
+        <div><div class="uz-title" id="batch-audios-name">Choisir des fichiers</div><div class="uz-sub">MP3 WAV AAC FLAC</div></div>
+        <input type="file" accept="audio/*,audio/flac,.flac" id="batch-audios-file" multiple>
       </div>
       <div class="batch-file-list" id="batch-audios-list"></div>
-    </div>
-    </div>
-    <div class="section-block">
-    <div class="sec-title">Metadata</div>
-    <div class="field-group">
-      <label>Durée de la vidéo</label>
-      <div class="range-row">
-        <input type="range" id="batch-dur-range" min="5" max="30" step="1" value="15">
-        <span class="range-val" id="batch-dur-val">15s</span>
-      </div>
     </div>
     </div>
     <div class="notice">📦 Max 10 vidéos par session</div>
@@ -317,22 +337,6 @@ canvas{display:block;width:100%;height:100%}
       <button class="btn primary" id="batch-generate-btn" onclick="batchGenerateAll()" disabled>Générer mp4</button>
     </div>
     <div id="batch-pairs-list" class="batch-pairs"></div>
-    <div class="seg-progress-bar">
-      <div class="seg-track">
-        <div class="seg seg-frames" id="seg-frames"><div class="seg-fill" id="seg-frames-fill"></div></div>
-        <div class="seg-sep"></div>
-        <div class="seg seg-upload" id="seg-upload"><div class="seg-fill" id="seg-upload-fill"></div></div>
-        <div class="seg-sep"></div>
-        <div class="seg seg-encoding" id="seg-encoding"><div class="seg-fill" id="seg-encoding-fill"></div></div>
-      </div>
-      <div class="seg-labels">
-        <span class="seg-label" id="seg-label-frames">Rendu</span>
-        <span class="seg-label" id="seg-label-upload">Upload</span>
-        <span class="seg-label" id="seg-label-encoding">Encodage</span>
-      </div>
-    </div>
-    <p class="status" id="status" style="display:none"></p>
-    <span id="eta" style="display:none;font-size:11px;opacity:0.4;font-family:var(--mono)"></span>
   </main>
   <aside class="batch-edit-panel" id="batch-edit-panel" style="display:none">
     <div class="batch-edit-header">
@@ -341,34 +345,6 @@ canvas{display:block;width:100%;height:100%}
     </div>
     <canvas id="batch-edit-cv" width="200" height="250"></canvas>
     <div class="batch-edit-name" id="batch-edit-name"></div>
-    <div class="field-group">
-      <label>Opacité texte</label>
-      <div class="range-row">
-        <input type="range" id="batch-edit-opacity" min="0" max="100" step="1" value="80">
-        <span class="range-val" id="batch-edit-opacity-val">80%</span>
-      </div>
-    </div>
-    <div class="field-group">
-      <label>Zoom</label>
-      <div class="range-row">
-        <input type="range" id="batch-edit-zoom" min="100" max="150" step="1" value="103">
-        <span class="range-val" id="batch-edit-zoom-val">103%</span>
-      </div>
-    </div>
-    <div class="field-group">
-      <label>Position X</label>
-      <div class="range-row">
-        <input type="range" id="batch-edit-posx" min="-50" max="50" step="1" value="0">
-        <span class="range-val" id="batch-edit-posx-val">0</span>
-      </div>
-    </div>
-    <div class="field-group">
-      <label>Position Y</label>
-      <div class="range-row">
-        <input type="range" id="batch-edit-posy" min="-50" max="50" step="1" value="0">
-        <span class="range-val" id="batch-edit-posy-val">0</span>
-      </div>
-    </div>
     <div class="field-group">
       <label>Background</label>
       <div class="upload-zone" style="cursor:default">
@@ -383,6 +359,45 @@ canvas{display:block;width:100%;height:100%}
       <button class="btn" style="width:100%;justify-content:center;margin-top:8px" onclick="batchEditRerollBg()">🎲 Changer</button>
     </div>
   </aside>
+</div>
+</div>
+<div id="subtab-booster" class="subtab-panel">
+<div class="app" id="booster-app">
+  <aside class="sidebar">
+    <div class="section-block">
+    <div class="sec-title">Date</div>
+    <div class="field-group">
+      <label>Texte affiché</label>
+      <input type="text" id="booster-date" placeholder="JUNE 2026">
+    </div>
+    </div>
+    <div class="section-block">
+    <div class="sec-title">Background</div>
+    <div class="field-group">
+      <button class="btn" style="width:100%;justify-content:center" onclick="boosterPickRandomBg()">🎲 Background aléatoire</button>
+      <div id="booster-bg-preview" style="display:none;align-items:center;gap:8px;margin-top:8px">
+        <img id="booster-bg-thumb" style="width:34px;height:34px;object-fit:cover;border-radius:2px;flex-shrink:0">
+        <span id="booster-bg-name" style="font-family:var(--mono);font-size:10px;opacity:0.4"></span>
+      </div>
+    </div>
+    </div>
+    <div class="section-block">
+    <div class="sec-title">Export</div>
+    <div class="field-group">
+      <label>Durée de la vidéo</label>
+      <div class="range-row">
+        <input type="range" id="booster-dur-range" min="15" max="30" step="1" value="30">
+        <span class="range-val" id="booster-dur-val">30s</span>
+      </div>
+    </div>
+    </div>
+    <div class="notice">Les frames de l'animation seront ajoutées prochainement.</div>
+  </aside>
+  <main class="main">
+    <canvas id="booster-preview-cv" class="batch-main-preview-cv" width="432" height="540" style="display:block"></canvas>
+    <button class="btn primary" style="width:216px;justify-content:center" onclick="boosterGenerate()">⬇ Générer MP4</button>
+  </main>
+</div>
 </div>
 </div>
 
@@ -490,9 +505,9 @@ function drawFrame(t,totalDur,targetCtx,overrides){
   c.save();
   if(isNegative)c.filter='invert(1)';
   if(bgImg){
-    const zoom=ov.bgZoom!=null?ov.bgZoom:state.bgZoom/100;
-    const posX=ov.bgPosX!=null?(ov.bgPosX+50)/100:state.bgPosX/100;
-    const posY=ov.bgPosY!=null?(ov.bgPosY+50)/100:state.bgPosY/100;
+    const zoom=1.03;
+    const posX=0.5;
+    const posY=0.5;
     const anim=1.03+0.015*Math.sin(t*0.25);
     const coverScale=Math.max(cw/bgImg.naturalWidth,ch/bgImg.naturalHeight);
     const finalScale=coverScale*zoom*anim;
@@ -512,9 +527,9 @@ function drawFrame(t,totalDur,targetCtx,overrides){
     c.fillStyle='rgba(255,255,255,0.18)';c.font=`500 ${32*sc}px DM Sans,sans-serif`;
     c.textAlign='center';c.textBaseline='middle';c.fillText('Cover',cw/2,cy+cs/2);
   }
-  const opA=ov.textOpacity!=null?ov.textOpacity:state.opA;
-  const opT=ov.textOpacity!=null?ov.textOpacity:state.opT;
-  const opL=ov.textOpacity!=null?ov.textOpacity:state.opL;
+  const opA=0.96;
+  const opT=0.96;
+  const opL=0.96;
   const rgb=ov.textColor!=null?ov.textColor:(isNegative?'0,0,0':'255,255,255');
   c.textAlign='center';c.textBaseline='alphabetic';
   c.font=`${72*sc}px EuropaGroteskSH-Med,sans-serif`;c.fillStyle=`rgba(${rgb},${opA})`;fillTextStretched(c,artist,cw/2,cy+cs+110*sc);
@@ -672,16 +687,76 @@ function switchTab(name,btn){
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
   if(name==='podcast')drawPodcastFrame();
-  if(name==='video'){
-    document.getElementById('batch-dur-range').value=state.dur;
-    document.getElementById('batch-dur-val').textContent=state.dur+'s';
-  }
+}
+function switchVideoSubTab(name,btn){
+  document.querySelectorAll('.subtab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.subtab').forEach(b=>b.classList.remove('active'));
+  document.getElementById('subtab-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='booster')drawBoosterFrame();
 }
 
+// ── BOOSTER ───────────────────────────────────
+let boosterBg=null;
+function drawBoosterFrame(){
+  const cv=document.getElementById('booster-preview-cv');
+  if(!cv)return;
+  const ctx=cv.getContext('2d');
+  const cw=cv.width,ch=cv.height;
+  const sc=cw/W;
+  ctx.clearRect(0,0,cw,ch);
+  ctx.fillStyle='#000';ctx.fillRect(0,0,cw,ch);
+  if(boosterBg){
+    const scale=Math.max(cw/boosterBg.naturalWidth,ch/boosterBg.naturalHeight);
+    const sw=boosterBg.naturalWidth*scale,sh=boosterBg.naturalHeight*scale;
+    ctx.drawImage(boosterBg,(cw-sw)/2,(ch-sh)/2,sw,sh);
+  }
+  const dateText=(document.getElementById('booster-date').value||'').toUpperCase();
+  if(dateText){
+    ctx.fillStyle='#000';
+    ctx.font=`bold ${36*sc}px DM Sans,sans-serif`;
+    ctx.textAlign='left';ctx.textBaseline='alphabetic';
+    ctx.fillText(dateText,60*sc,155*sc);
+  }
+}
+function boosterPickRandomBg(){
+  fetch(`${BASE_URL}/booster/backgrounds/random`)
+    .then(r=>r.json())
+    .then(({filename,url})=>{
+      const absUrl=BASE_URL+url;
+      const img=new Image();
+      img.crossOrigin='anonymous';
+      img.onload=()=>{
+        boosterBg=img;
+        document.getElementById('booster-bg-thumb').src=absUrl;
+        document.getElementById('booster-bg-name').textContent=filename;
+        document.getElementById('booster-bg-preview').style.display='flex';
+        drawBoosterFrame();
+      };
+      img.src=absUrl;
+    })
+    .catch(e=>console.warn('[booster]',e.message));
+}
+function boosterGenerate(){
+  elStatus.style.display='block';
+  setStatus('Disponible dès réception des frames animation.','error');
+}
+document.getElementById('booster-date').oninput=e=>{
+  localStorage.setItem('sss-booster-date',e.target.value);
+  drawBoosterFrame();
+};
+document.getElementById('booster-dur-range').oninput=e=>{
+  document.getElementById('booster-dur-val').textContent=e.target.value+'s';
+};
+const savedBoosterDate=localStorage.getItem('sss-booster-date');
+if(savedBoosterDate)document.getElementById('booster-date').value=savedBoosterDate;
+drawBoosterFrame();
+
 // ── BATCH ─────────────────────────────────────
+const BATCH_DUR=30;
 let batchCovers=[],batchAudios=[],batchPairs=[],batchBgByBase={},batchLoopStartByBase={};
 let activePairIndex=null;
-let batchTextOpacityByBase={},batchZoomByBase={},batchPosXByBase={},batchPosYByBase={},batchBgModeByBase={},batchTextColorByBase={};
+let batchBgModeByBase={},batchTextColorByBase={};
 function batchFmtTime(s){return `${Math.floor(s/60)}:${String(Math.floor(s%60)).padStart(2,'0')}`;}
 function batchBaseName(f){return f.name.replace(/\.[^.]+$/,'');}
 function renderBatchFileList(files,elId){
@@ -694,7 +769,14 @@ async function batchFetchRandomBg(){
 }
 async function batchAssignBackgrounds(pairsToAssign){
   await Promise.all(pairsToAssign.map(async p=>{
-    try{const filename=await batchFetchRandomBg();p.bg=filename;batchBgByBase[p.base]=filename;}catch(e){}
+    try{
+      const filename=await batchFetchRandomBg();
+      p.bg=filename;
+      batchBgByBase[p.base]=filename;
+      if(filename.startsWith('black_'))p.textColor='255,255,255';
+      else if(filename.startsWith('white_'))p.textColor='0,0,0';
+      batchTextColorByBase[p.base]=p.textColor;
+    }catch(e){}
   }));
   batchRenderPairs();
 }
@@ -722,10 +804,6 @@ function batchRebuildPairs(){
     const parts=base.split(' - ');
     const artist=parts[0]?.trim()||base,title=parts[1]?.trim()||'',label=parts[2]?.trim();
     return {base,cover,audio,artist,title,label,bg:batchBgByBase[base]||null,loopStart:batchLoopStartByBase[base]||0,
-      textOpacity:batchTextOpacityByBase[base]!==undefined?batchTextOpacityByBase[base]:0.8,
-      bgZoom:batchZoomByBase[base]!==undefined?batchZoomByBase[base]:1.03,
-      bgPosX:batchPosXByBase[base]!==undefined?batchPosXByBase[base]:0,
-      bgPosY:batchPosYByBase[base]!==undefined?batchPosYByBase[base]:0,
       bgMode:batchBgModeByBase[base]||'black',
       textColor:batchTextColorByBase[base]||'255,255,255',
       ok:!!(cover&&audio)};
@@ -788,7 +866,7 @@ function batchRenderPairFrame(p,ctx){
   bgImg=p._bgImgEl;coverImg=p._coverImgEl;
   state.artist=p.artist;state.title=p.title;state.label=p.label||'';
   isNegative=false;
-  drawFrame(0,state.dur,ctx,{textOpacity:p.textOpacity,bgZoom:p.bgZoom,bgPosX:p.bgPosX,bgPosY:p.bgPosY,textColor:p.textColor});
+  drawFrame(0,BATCH_DUR,ctx,{textColor:p.textColor});
   bgImg=savedBgImg;coverImg=savedCoverImg;state.artist=savedArtist;state.title=savedTitle;state.label=savedLabel;isNegative=savedNegative;
 }
 async function batchDrawPairPreview(idx){
@@ -861,14 +939,6 @@ function batchPopulateEditPanel(idx){
   const p=batchPairs[idx];
   if(!p)return;
   document.getElementById('batch-edit-name').textContent=[p.artist,p.title].filter(Boolean).join(' — ');
-  document.getElementById('batch-edit-opacity').value=Math.round(p.textOpacity*100);
-  document.getElementById('batch-edit-opacity-val').textContent=Math.round(p.textOpacity*100)+'%';
-  document.getElementById('batch-edit-zoom').value=Math.round(p.bgZoom*100);
-  document.getElementById('batch-edit-zoom-val').textContent=Math.round(p.bgZoom*100)+'%';
-  document.getElementById('batch-edit-posx').value=p.bgPosX;
-  document.getElementById('batch-edit-posx-val').textContent=p.bgPosX;
-  document.getElementById('batch-edit-posy').value=p.bgPosY;
-  document.getElementById('batch-edit-posy-val').textContent=p.bgPosY;
   document.getElementById('batch-edit-bg-thumb').src=p.bg?`${BASE_URL}/backgrounds/${p.bg}`:'';
   document.getElementById('batch-edit-bg-name').textContent=p.bg||'—';
   batchUpdateEditModeToggle(p);
@@ -887,7 +957,18 @@ function batchSetEditBgMode(mode){
   p.textColor=mode==='black'?'255,255,255':'0,0,0';
   batchTextColorByBase[p.base]=p.textColor;
   batchUpdateEditModeToggle(p);
-  batchEditRerollBg();
+  if(p.bg){
+    const num=p.bg.replace(/^(black|white)_/,'').replace(/\.jpg$/,'');
+    const newFilename=`${mode}_${num}.jpg`;
+    p.bg=newFilename;
+    batchBgByBase[p.base]=newFilename;
+    document.getElementById('batch-edit-bg-thumb').src=`${BASE_URL}/backgrounds/${newFilename}`;
+    document.getElementById('batch-edit-bg-name').textContent=newFilename;
+    batchGetPairImages(p).then(()=>{
+      batchDrawEditPreview();
+      batchRenderPairs();
+    });
+  }
 }
 function batchCloseEditPanel(){
   activePairIndex=null;
@@ -1086,7 +1167,7 @@ async function batchExportOnePair(p,idx,total){
   bgImg=bgImgLoaded;coverImg=coverImgLoaded;
   if(!bgImg.complete)await new Promise(res=>{bgImg.onload=res;});
   state.artist=p.artist;state.title=p.title;state.label=p.label||'';
-  const dur=state.dur,fps=20,totalFrames=dur*fps;
+  const dur=BATCH_DUR,fps=20,totalFrames=dur*fps;
   const exportCv=document.createElement('canvas');
   exportCv.width=1080;exportCv.height=1350;
   const exportCtx=exportCv.getContext('2d');
@@ -1094,7 +1175,7 @@ async function batchExportOnePair(p,idx,total){
   const savedNegative=isNegative;
   isNegative=false;
   for(let i=0;i<totalFrames;i++){
-    drawFrame(i/fps,dur,exportCtx,{textOpacity:p.textOpacity,bgZoom:p.bgZoom,bgPosX:p.bgPosX,bgPosY:p.bgPosY,textColor:p.textColor});
+    drawFrame(i/fps,dur,exportCtx,{textColor:p.textColor});
     let blob=await new Promise(res=>exportCv.toBlob(res,'image/jpeg',0.75));
     const fname=`f${String(i).padStart(5,'0')}.jpg`;
     formData.append(fname,blob,fname);
@@ -1148,7 +1229,7 @@ async function startBatchExport(){
   document.querySelector('.seg-progress-bar').style.display='block';
   setStatus('Démarrage du batch…');
   resetSegments();
-  elEta.textContent=getTimeEstimate(state.dur,validPairs.some(p=>p.audio));
+  elEta.textContent=getTimeEstimate(BATCH_DUR,validPairs.some(p=>p.audio));
   elEta.style.display='block';
   const zip=new JSZip();
   const savedBgImg=bgImg,savedCoverImg=coverImg,savedArtist=state.artist,savedTitle=state.title,savedLabel=state.label;
@@ -1209,42 +1290,6 @@ document.getElementById('batch-audios-file').onchange=e=>{
   renderBatchFileList(batchAudios,'batch-audios-list');
   batchRebuildPairs();
   e.target.value='';
-};
-document.getElementById('batch-dur-range').oninput=e=>{
-  document.getElementById('batch-dur-val').textContent=e.target.value+'s';
-  state.dur=+e.target.value;
-};
-document.getElementById('batch-edit-opacity').oninput=e=>{
-  if(activePairIndex==null)return;
-  const p=batchPairs[activePairIndex];
-  p.textOpacity=+e.target.value/100;
-  batchTextOpacityByBase[p.base]=p.textOpacity;
-  document.getElementById('batch-edit-opacity-val').textContent=e.target.value+'%';
-  batchDrawPairPreview(activePairIndex);
-};
-document.getElementById('batch-edit-zoom').oninput=e=>{
-  if(activePairIndex==null)return;
-  const p=batchPairs[activePairIndex];
-  p.bgZoom=+e.target.value/100;
-  batchZoomByBase[p.base]=p.bgZoom;
-  document.getElementById('batch-edit-zoom-val').textContent=e.target.value+'%';
-  batchDrawPairPreview(activePairIndex);
-};
-document.getElementById('batch-edit-posx').oninput=e=>{
-  if(activePairIndex==null)return;
-  const p=batchPairs[activePairIndex];
-  p.bgPosX=+e.target.value;
-  batchPosXByBase[p.base]=p.bgPosX;
-  document.getElementById('batch-edit-posx-val').textContent=e.target.value;
-  batchDrawPairPreview(activePairIndex);
-};
-document.getElementById('batch-edit-posy').oninput=e=>{
-  if(activePairIndex==null)return;
-  const p=batchPairs[activePairIndex];
-  p.bgPosY=+e.target.value;
-  batchPosYByBase[p.base]=p.bgPosY;
-  document.getElementById('batch-edit-posy-val').textContent=e.target.value;
-  batchDrawPairPreview(activePairIndex);
 };
 
 document.getElementById('p-bg-file').onchange=e=>{

@@ -11,6 +11,7 @@ const execFileAsync = promisify(execFile);
 const app = express();
 
 const BACKGROUNDS_DIR = path.join(__dirname, 'public', 'backgrounds');
+const BOOSTER_BACKGROUNDS_DIR = path.join(__dirname, 'public', 'booster', 'backgrounds');
 
 let isProcessing = false;
 let _bgCache = null;
@@ -20,6 +21,14 @@ function getBackgroundFiles() {
       .filter(f => f.toLowerCase().endsWith('.jpg'));
   }
   return _bgCache;
+}
+let _boosterBgCache = null;
+function getBoosterBackgroundFiles() {
+  if (!_boosterBgCache) {
+    _boosterBgCache = fs.readdirSync(BOOSTER_BACKGROUNDS_DIR)
+      .filter(f => f.toLowerCase().endsWith('.jpg'));
+  }
+  return _boosterBgCache;
 }
 
 // ── CORS ──────────────────────────────────────────────────────────
@@ -33,6 +42,7 @@ app.use((req, res, next) => {
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/backgrounds', express.static(BACKGROUNDS_DIR));
+app.use('/booster/backgrounds', express.static(BOOSTER_BACKGROUNDS_DIR));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, req.tmpDir),
@@ -41,7 +51,7 @@ const storage = multer.diskStorage({
     cb(null, safe);
   }
 });
-const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024, files: 600 } });
+const upload = multer({ storage, limits: { fileSize: 20 * 1024 * 1024, files: 610 } });
 
 function makeTmpDir(req, res, next) {
   req.tmpDir = path.join(os.tmpdir(), `sss-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -142,6 +152,27 @@ app.get('/backgrounds/random', (req, res) => {
 app.get('/backgrounds/list', (req, res) => {
   try {
     const backgrounds = getBackgroundFiles();
+    if (!backgrounds.length) return res.status(404).json({ error: 'Aucun background disponible.' });
+    res.json({ backgrounds, total: backgrounds.length });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erreur lecture backgrounds.' });
+  }
+});
+
+app.get('/booster/backgrounds/random', (req, res) => {
+  try {
+    const files = getBoosterBackgroundFiles();
+    if (!files.length) return res.status(404).json({ error: 'Aucun background disponible.' });
+    const filename = files[Math.floor(Math.random() * files.length)];
+    res.json({ filename, url: `/booster/backgrounds/${filename}` });
+  } catch (err) {
+    return res.status(500).json({ error: 'Erreur lecture backgrounds.' });
+  }
+});
+
+app.get('/booster/backgrounds/list', (req, res) => {
+  try {
+    const backgrounds = getBoosterBackgroundFiles();
     if (!backgrounds.length) return res.status(404).json({ error: 'Aucun background disponible.' });
     res.json({ backgrounds, total: backgrounds.length });
   } catch (err) {
