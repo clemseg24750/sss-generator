@@ -12,6 +12,7 @@ const app = express();
 
 const BACKGROUNDS_DIR = path.join(__dirname, 'public', 'backgrounds');
 const BOOSTER_BACKGROUNDS_DIR = path.join(__dirname, 'public', 'booster', 'backgrounds');
+const BOOSTER_FRAMES_DIR = path.join(__dirname, 'public', 'booster', 'frames');
 
 let isProcessing = false;
 let _bgCache = null;
@@ -43,6 +44,7 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/backgrounds', express.static(BACKGROUNDS_DIR));
 app.use('/booster/backgrounds', express.static(BOOSTER_BACKGROUNDS_DIR));
+app.use('/booster/frames', express.static(BOOSTER_FRAMES_DIR));
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, req.tmpDir),
@@ -127,6 +129,68 @@ async function runExport(req, res) {
   }
 }
 
+function escapeDrawtext(s) {
+  return String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/:/g, '\\:')
+    .replace(/%/g, '\\%');
+}
+
+async function runBoosterExport(req, res) {
+  const { tmpDir } = req;
+  try {
+    const bgFilename = (req.body.bgFilename || '').replace(/[^a-zA-Z0-9._-]/g, '');
+    const date = (req.body.date || '').slice(0, 60);
+    const filename = (req.body.filename || 'booster').replace(/[^\w\-]/g, '_');
+
+    if (!bgFilename) throw new Error('Background manquant.');
+    const bgSrc = path.join(BOOSTER_BACKGROUNDS_DIR, bgFilename);
+    if (!fs.existsSync(bgSrc)) throw new Error('Background introuvable.');
+    fs.copyFileSync(bgSrc, path.join(tmpDir, 'bg.jpg'));
+
+    const drawtext = `drawtext=text='${escapeDrawtext(date)}':fontsize=36:fontcolor=black:x=60:y=280:font=Sans:style=Bold`;
+
+    const args = [
+      '-loop', '1', '-i', 'bg.jpg',
+      '-stream_loop', '-1', '-framerate', '4', '-i', path.join(BOOSTER_FRAMES_DIR, 'frame%04d.png'), '-t', '30',
+      '-filter_complex', `[0:v][1:v]overlay=0:0,scale=trunc(iw/2)*2:trunc(ih/2)*2,${drawtext}[out]`,
+      '-map', '[out]',
+      '-c:v', 'libx264',
+      '-preset', 'ultrafast',
+      '-crf', '28',
+      '-pix_fmt', 'yuv420p',
+      '-t', '30',
+      '-movflags', '+faststart',
+      'out.mp4'
+    ];
+
+    await execFileAsync('ffmpeg', args, { cwd: tmpDir, timeout: 5 * 60 * 1000, maxBuffer: 10 * 1024 * 1024 });
+
+    res.download(path.join(tmpDir, 'out.mp4'), `${filename}.mp4`, (err) => {
+      if (err) console.error('[booster export download error]', err.message);
+      fs.rm(tmpDir, { recursive: true, force: true }, (err) => {
+        if (err) console.error('[booster cleanup error]', err.message);
+      });
+    });
+  } catch (err) {
+    console.error('[booster export error]', err.message);
+    fs.rm(tmpDir, { recursive: true, force: true }, (err) => {
+      if (err) console.error('[booster cleanup error]', err.message);
+    });
+    if (!res.headersSent) {
+      const msg = err.killed
+        ? 'Encodage annulé — délai dépassé.'
+        : err.code === 'ENOENT'
+        ? 'FFmpeg introuvable — installez-le et vérifiez le PATH.'
+        : (err.stderr || err.message);
+      res.status(500).json({ error: msg });
+    }
+  } finally {
+    isProcessing = false;
+  }
+}
+
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 app.get('/status', (req, res) => {
@@ -181,6 +245,7 @@ app.get('/booster/backgrounds/list', (req, res) => {
 });
 
 app.post('/export', exportLimiter, checkProcessing, makeTmpDir, upload.any(), handleUploadError, runExport);
+app.post('/booster/export', checkProcessing, makeTmpDir, upload.any(), handleUploadError, runBoosterExport);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`SSS Generator → http://localhost:${PORT}`));
