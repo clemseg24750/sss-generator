@@ -51,7 +51,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:13px;heigh
 .btn.primary:hover{background:transparent;color:var(--text)}
 .btn:disabled{opacity:.35;cursor:default;pointer-events:none}
 .btn-row{display:flex;gap:8px;width:100%;max-width:440px}
-.canvas-wrap{background:#000;border-radius:0;overflow:hidden;border:1px solid var(--border);width:100%;max-width:440px;aspect-ratio:4/5}
+.canvas-wrap{background:#000;border-radius:0;overflow:hidden;border:1px solid var(--border);width:100%;max-width:440px;aspect-ratio:4/5;position:sticky;top:24px;align-self:flex-start}
 canvas{display:block;width:100%;height:100%}
 .status{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;min-height:16px;letter-spacing:.04em;max-width:440px;line-height:1.6}
 .status.error{color:#f87171}.status.success{color:#4ade80}
@@ -114,9 +114,12 @@ canvas{display:block;width:100%;height:100%}
 .batch-wave{display:flex;align-items:center;gap:8px;margin:-2px 0 0 0;padding:0 2px}
 .wave-play{border:1px solid var(--border-h);border-radius:0;background:transparent;color:var(--text);font-size:11px;padding:4px 9px;cursor:pointer;flex-shrink:0;transition:.1s}
 .wave-play:hover{background:var(--surface2)}
-.wave-canvas-wrap{flex:1;min-width:0}
+.wave-canvas-wrap{flex:1;min-width:0;position:relative}
 .wave-cv{width:100%;height:40px;display:block;border-radius:0;cursor:grab;touch-action:none}
 .wave-time{font-family:var(--mono);font-size:10px;color:var(--muted);margin:2px 0 6px 44px}
+.waveform-loupe{position:absolute;width:160px;height:60px;display:none;background:var(--surface2);border:1px solid var(--border-h);border-radius:0;pointer-events:none;z-index:5}
+.tc-input{cursor:pointer}
+.tc-input:hover{color:var(--text)}
 .batch-app{grid-template-columns:300px minmax(400px,1fr)}
 .batch-app.edit-open{grid-template-columns:300px minmax(400px,1fr) 280px}
 .batch-edit-panel{border-left:1px solid var(--border);padding:20px;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
@@ -266,9 +269,11 @@ canvas{display:block;width:100%;height:100%}
     <div class="notice">📸 JPEG · 1080×1350 Instagram / 1400×1400 SoundCloud</div>
   </aside>
   <main class="main">
-    <div class="canvas-wrap" id="podcast-cv-wrap" style="aspect-ratio:4/5"><canvas id="pcv"></canvas></div>
-    <div class="btn-row">
-      <button class="btn primary" onclick="exportPodcastImage()">⬇ Exporter JPEG</button>
+    <div style="position:sticky; top:24px; align-self:flex-start;">
+      <div class="canvas-wrap" id="podcast-cv-wrap" style="aspect-ratio:4/5"><canvas id="pcv"></canvas></div>
+      <div class="btn-row">
+        <button class="btn primary" onclick="exportPodcastImage()">⬇ Exporter JPEG</button>
+      </div>
     </div>
     <p class="status" id="podcast-status"></p>
   </main>
@@ -899,9 +904,9 @@ function batchRebuildPairs(){
       ok:!!(cover&&audio)};
   });
   updateBatchGenerateBtn();
+  batchRenderPairs();
   const needBg=batchPairs.filter(p=>p.ok&&!p.bg);
   if(needBg.length)batchAssignBackgrounds(needBg);
-  else batchRenderPairs();
 }
 function batchRenderPairs(){
   const list=document.getElementById('batch-pairs-list');
@@ -918,9 +923,9 @@ function batchRenderPairs(){
       :p.status==='failed'?'<span class="gen-status failed">✗ Échec — serveur occupé</span>':'';
     const wave=p.audio?`<div class="batch-wave">
         <button class="wave-play" id="batch-wave-play-${idx}" onclick="batchToggleAudioPreview(${idx})">▶</button>
-        <div class="wave-canvas-wrap"><canvas class="wave-cv" id="batch-wave-cv-${idx}"></canvas></div>
+        <div class="wave-canvas-wrap"><canvas class="wave-cv" id="batch-wave-cv-${idx}"></canvas><canvas class="waveform-loupe" id="waveform-loupe-${idx}" width="160" height="60"></canvas></div>
       </div>
-      <div class="wave-time" id="batch-wave-time-${idx}"></div>`:'';
+      <div class="wave-time" id="batch-wave-time-${idx}"><span id="tc-start-${idx}" class="tc-input" onclick="batchEditTimecode(${idx})">0:00</span> — <span class="tc-end" id="tc-end-${idx}">0:30</span></div>`:'';
     return `<div class="batch-row${p.status==='failed'?' failed':''}">
       <canvas class="batch-preview-cv" id="batch-preview-cv-${idx}" width="80" height="100" onclick="batchSelectPair(${idx})"></canvas>
       <div class="batch-row-info">
@@ -1099,10 +1104,98 @@ async function batchGetDecodedBuffer(p){
 }
 function batchUpdateTimecode(idx){
   const p=batchPairs[idx];
-  const el=document.getElementById(`batch-wave-time-${idx}`);
-  if(!p||!el||!p.decodedBuffer)return;
+  const elStart=document.getElementById(`tc-start-${idx}`);
+  const elEnd=document.getElementById(`tc-end-${idx}`);
+  if(!p||!elStart||!elEnd||!p.decodedBuffer)return;
   const winLen=Math.min(30,p.decodedBuffer.duration);
-  el.textContent=`${batchFmtTime(p.loopStart)} — ${batchFmtTime(p.loopStart+winLen)}`;
+  elStart.textContent=batchFmtTime(p.loopStart);
+  elEnd.textContent=batchFmtTime(p.loopStart+winLen);
+}
+function batchEditTimecode(idx){
+  const p=batchPairs[idx];
+  const elStart=document.getElementById(`tc-start-${idx}`);
+  if(!p||!elStart||!p.decodedBuffer)return;
+  if(elStart.tagName==='INPUT')return;
+  const dur=p.decodedBuffer.duration;
+  const maxStart=Math.max(0,dur-Math.min(30,dur));
+  const input=document.createElement('input');
+  input.type='text';
+  input.value=batchFmtTime(p.loopStart);
+  input.style.cssText='width:40px;font-family:var(--mono);font-size:10px;padding:0;border:none;border-bottom:1px solid var(--text);background:transparent;color:var(--text);text-align:center';
+  elStart.replaceWith(input);
+  input.focus();
+  input.select();
+  let done=false;
+  const commit=()=>{
+    if(done)return;
+    done=true;
+    const m=input.value.trim().match(/^(\d+):([0-5]?\d)$/);
+    if(m){
+      const secs=parseInt(m[1],10)*60+parseInt(m[2],10);
+      if(secs>=0&&secs<=maxStart){
+        p.loopStart=secs;
+        batchLoopStartByBase[p.base]=secs;
+        batchRedrawWaveform(idx);
+      }
+    }
+    input.replaceWith(elStart);
+    batchUpdateTimecode(idx);
+  };
+  input.onblur=commit;
+  input.onkeydown=e=>{
+    if(e.key==='Enter')input.blur();
+    else if(e.key==='Escape'){done=true;input.replaceWith(elStart);batchUpdateTimecode(idx);}
+  };
+}
+function batchHideLoupe(idx){
+  const lp=document.getElementById(`waveform-loupe-${idx}`);
+  if(lp)lp.style.display='none';
+}
+function batchDrawLoupe(idx,clientX){
+  const p=batchPairs[idx];
+  const cv=document.getElementById(`batch-wave-cv-${idx}`);
+  const lp=document.getElementById(`waveform-loupe-${idx}`);
+  if(!p||!cv||!lp||!p.decodedBuffer)return;
+  const wrap=cv.parentElement;
+  const wrapRect=wrap.getBoundingClientRect();
+  const lpW=lp.width,lpH=lp.height;
+  let left=(clientX-wrapRect.left)-lpW/2;
+  left=Math.max(0,Math.min(wrapRect.width-lpW,left));
+  lp.style.left=`${left}px`;
+  lp.style.top=`${-lpH-6}px`;
+  lp.style.display='block';
+  const ctx=lp.getContext('2d');
+  const data=p.decodedBuffer.getChannelData(0);
+  const sr=p.decodedBuffer.sampleRate;
+  const dur=p.decodedBuffer.duration;
+  const center=p.loopStart;
+  const winStart=Math.max(0,center-2);
+  const winEnd=Math.min(dur,center+2);
+  const sampleStart=Math.floor(winStart*sr);
+  const sampleEnd=Math.floor(winEnd*sr);
+  const nSamples=Math.max(1,sampleEnd-sampleStart);
+  ctx.clearRect(0,0,lpW,lpH);
+  ctx.fillStyle='rgba(255,255,255,0.05)';ctx.fillRect(0,0,lpW,lpH);
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  const step=Math.max(1,Math.floor(nSamples/lpW));
+  const mid=lpH/2;
+  for(let x=0;x<lpW;x++){
+    let min=1,max=-1;
+    const base=sampleStart+x*step;
+    for(let j=0;j<step;j++){
+      const v=data[base+j];
+      if(v===undefined)continue;
+      if(v<min)min=v;
+      if(v>max)max=v;
+    }
+    if(max<min){min=0;max=0;}
+    const y1=mid+min*mid,y2=mid+max*mid;
+    ctx.fillRect(x,Math.min(y1,y2),1,Math.max(1,Math.abs(y2-y1)));
+  }
+  const centerRatio=winEnd>winStart?(center-winStart)/(winEnd-winStart):0.5;
+  const cx=centerRatio*lpW;
+  ctx.strokeStyle='#fff';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(cx,0);ctx.lineTo(cx,lpH);ctx.stroke();
 }
 function batchUpdatePlayBtn(idx){
   const btn=document.getElementById(`batch-wave-play-${idx}`);
@@ -1166,10 +1259,12 @@ function batchAttachWaveformDrag(idx,cv,buf){
     batchLoopStartByBase[batchPairs[idx].base]=newStart;
     batchRedrawWaveform(idx);
     batchUpdateTimecode(idx);
+    batchDrawLoupe(idx,e.clientX);
   };
-  const stop=()=>{dragging=false;};
+  const stop=()=>{dragging=false;batchHideLoupe(idx);};
   cv.onpointerup=()=>{
     dragging=false;
+    batchHideLoupe(idx);
     const p=batchPairs[idx];
     if(p&&p._playSource){
       try{p._playSource.stop();}catch(e){}
